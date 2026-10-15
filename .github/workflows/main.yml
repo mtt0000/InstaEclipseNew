@@ -40,13 +40,6 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
-      - name: Prepare Android debug keystore directory
-        run: |
-          mkdir -p ~/.android
-          chmod 777 ~/.android
-          mkdir -p ~/.config/.android
-          chmod 777 ~/.config/.android
-
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
