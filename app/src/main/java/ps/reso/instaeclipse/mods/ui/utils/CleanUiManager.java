@@ -18,47 +18,45 @@ import ps.reso.instaeclipse.utils.log.ModuleLog;
 public class CleanUiManager {
 
     private static final String[] UI_BUTTON_FLAGS = {
-        // === Direct Messages / Header e pulsanti di azione sui messaggi ===
-        "showHideChatButton",            // Pulsante nascondi/mostra chat nell'header dei DM
-        "showDeletedMessagesButton",     // Pulsante cronologia messaggi eliminati/annullati nell'header dei DM
-        "jumpToFirstMessage",            // Pulsante per scorrere al primo messaggio nell'header dei DM
-        "enableVoiceDownload",           // Icona/pulsante di download sulle bolle dei messaggi vocali
-        "enableStickerDownload",         // Icona/pulsante di download per sticker e GIF
-        "enableDmMediaDownload",         // Pulsante di salvataggio personalizzato su foto/video all'interno della chat
-
-        // === Quick Toggle nella Inbox dei DM ===
-        "quickToggleSeen",               // Icona/pulsante quick toggle del Ghost Mode accanto all'header della inbox
-
-        // === Pulsanti personalizzati nella schermata del Profilo ===
-        "savedOnProfile",                // Scorciatoia per la raccolta 'Elementi salvati' nell'header del profilo
-        "followersHistory",              // Scorciatoia per la cronologia/tracciamento dei follower sul profilo
-        "followListExport",              // Pulsante per esportare la lista follower/seguiti in formato CSV
-
-        // === Controlli overlay su Feed, Post e Reels ===
-        "enablePostDownload",            // Icona/pulsante di download personalizzato sui post del feed
-        "enableReelDownload",            // Pulsante di download nella vista Reels
-        "forceReelScrubber",             // Barra di avanzamento (seek-bar/scrubber) iniettata nei Reels
-        "offerPlaybackSpeed",            // Pulsante overlay per il controllo della velocità di riproduzione (0.5x - 3x)
-        "holdLeftSlowMotion",            // Controllo gesture in overlay per il rallentatore nei Reels
-        "enablePhotoZoom",               // Pulsante/trigger in overlay per lo zoom delle foto
-
-        // === Menu e azioni contestuali sui media ===
-        "copyMediaLink",                 // Pulsante/voce per copiare il link diretto
-        "offerCopyImage",                // Pulsante/voce per copiare l'immagine negli appunti
-        "offerMediaInfo",                // Pulsante per visualizzare i dettagli tecnici del media
-        "offerAudioDownload",            // Pulsante per scaricare solo la traccia audio
-        "uploadInstants",                // Pulsante picker della galleria iniettato per gli Instant
-        "saveInstants",                  // Pulsante per salvare gli Instant
-
-        // === Controlli iniettati nelle Storie ===
-        "enableStoryDownload",           // Pulsante di download nel visualizzatore delle storie
-        "storyInfo",                     // Pulsante/overlay con i dettagli della storia
-        "storyLinks",                    // Pulsanti per estrarre i link presenti nella storia
-        "enableStoryMentions",           // Pulsante per visualizzare tutte le menzioni della storia
-        "storyViewerSearch",             // Barra di ricerca iniettata nella lista degli spettatori della storia
-
-        // === Pulsanti iniettati per Sviluppatori e Diagnostica ===
-        "isDevEnabled"                   // Scorciatoia/pulsanti per le Opzioni Sviluppatore iniettate
+        "showHideChatButton",
+        "showDeletedMessagesButton",
+        "jumpToFirstMessage",
+        "chatExport",
+        "enableVoiceDownload",
+        "enableStickerDownload",
+        "enableDmMediaDownload",
+        "bulkUnsend",
+        "translateMessages",
+        "permanentViewMode",
+        "quickToggleSeen",
+        "savedOnProfile",
+        "followersHistory",
+        "followListExport",
+        "fancyBioFont",
+        "profileFollowsYouLabel",
+        "enableProfileDownload",
+        "enablePostDownload",
+        "likeUndo",
+        "enableCopyComment",
+        "commentSearch",
+        "enableCaptionCopy",
+        "enablePhotoZoom",
+        "enableReelDownload",
+        "forceReelScrubber",
+        "offerPlaybackSpeed",
+        "holdLeftSlowMotion",
+        "copyMediaLink",
+        "offerCopyImage",
+        "offerMediaInfo",
+        "offerAudioDownload",
+        "uploadInstants",
+        "saveInstants",
+        "enableStoryDownload",
+        "storyInfo",
+        "storyLinks",
+        "enableStoryMentions",
+        "storyViewerSearch",
+        "isDevEnabled"
     };
 
     public static synchronized void toggleCleanUi(Activity activity) {
