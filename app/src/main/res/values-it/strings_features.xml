@@ -9,4 +9,11 @@
     <string name="ig_direct_back_long_press_duration">Durata pressione tasto Indietro</string>
     <string name="ig_direct_empty_general_folder">Mostra cartella \'Generale\' vuota</string>
     <string name="ig_direct_hide_folders_bar">Nascondi barra delle cartelle</string>
+    <string name="clean_ui_toggle_title">Quick Toggle Pulsanti UI</string>
+    <string name="clean_ui_gesture_mode">Scorciatoia Tasto Home</string>
+    <string name="clean_ui_gesture_off">Disattivato</string>
+    <string name="clean_ui_gesture_long_press">Pressione prolungata</string>
+    <string name="clean_ui_gesture_double_tap_long">2 Tap + Pressione prolungata</string>
+    <string name="clean_ui_toast_on">Clean UI: Attivata (Pulsanti nascosti)</string>
+    <string name="clean_ui_toast_off">Clean UI: Disattivata (Pulsanti ripristinati)</string>
 </resources>

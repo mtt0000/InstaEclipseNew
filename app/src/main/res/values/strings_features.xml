@@ -9,4 +9,11 @@
     <string name="ig_direct_back_long_press_duration">Back Long-Press Duration</string>
     <string name="ig_direct_empty_general_folder">Show \'General\' Folder as Empty</string>
     <string name="ig_direct_hide_folders_bar">Hide Folders Bar</string>
+    <string name="clean_ui_toggle_title">Clean UI Quick Toggle</string>
+    <string name="clean_ui_gesture_mode">Home Button Shortcut</string>
+    <string name="clean_ui_gesture_off">Off</string>
+    <string name="clean_ui_gesture_long_press">Long Press</string>
+    <string name="clean_ui_gesture_double_tap_long">2 Taps + Long Press</string>
+    <string name="clean_ui_toast_on">Clean UI: On (Buttons hidden)</string>
+    <string name="clean_ui_toast_off">Clean UI: Off (Buttons restored)</string>
 </resources>
