@@ -68,7 +68,7 @@ jobs:
             APK_PATH="${{ env.SIGNED_RELEASE_FILE }}"
             NEW_APK_NAME="app-${{ github.ref_name }}-${{ env.SHORT_SHA }}-signed.apk"
           else
-            APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
+            APK_PATH=$(find app/build/outputs/apk/release -maxdepth 1 -name "*.apk" | head -n 1)
             NEW_APK_NAME="app-${{ github.ref_name }}-${{ env.SHORT_SHA }}-unsigned.apk"
           fi
 
