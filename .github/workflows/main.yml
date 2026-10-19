@@ -1,9 +1,9 @@
-name: Build & Release Signed APK per Branch
+name: Build & Release APK per Branch
 
 on:
   push:
     branches:
-      - "**" # Esegue il workflow per qualsiasi branch
+      - "**"
   workflow_dispatch:
 
 permissions:
@@ -30,70 +30,118 @@ jobs:
       - name: Run Unit Tests & Build APKs
         run: ./gradlew testDebugUnitTest assembleRelease assembleDebug
 
-      - name: Sign Release APK
+      - name: Prepare, Sign or Fallback APK
+        id: sign_step
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*-unsigned.apk" | head -n 1)
-          SIGNED_READY_APK=$(find app/build/outputs/apk/release -name "*.apk" ! -name "*-unsigned.apk" | head -n 1)
+          set -e
+          
+          # 1. Trova l'APK di release compilato da Gradle
+          ORIGINAL_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$ORIGINAL_APK" ]; then
+            echo "❌ Errore: nessun APK trovato in app/build/outputs/apk/release!"
+            exit 1
+          fi
+          echo "APK trovato: $ORIGINAL_APK"
 
-          if [ -n "$SIGNED_READY_APK" ]; then
-            cp "$SIGNED_READY_APK" InstaEclipse-signed.apk
-          else
-            if [ -n "$KEYSTORE_BASE64" ]; then
-              echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
-              KS_PASS="$KEYSTORE_PASSWORD"
-              K_ALIAS="$KEY_ALIAS"
-              K_PASS="$KEY_PASSWORD"
-            else
-              echo "⚠️ Nessun keystore nei Secrets trovato. Generazione di un keystore temporaneo..."
-              keytool -genkeypair -v \
-                -keystore release.keystore \
-                -alias instaeclipse \
-                -keyalg RSA \
-                -keysize 2048 \
-                -validity 10000 \
-                -storepass android \
-                -keypass android \
-                -dname "CN=InstaEclipse, OU=Dev, O=InstaEclipse, L=Rome, S=RM, C=IT"
-              KS_PASS="android"
-              K_ALIAS="instaeclipse"
-              K_PASS="android"
+          # 2. Individua i build-tools di Android in modo robusto
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          BUILD_TOOLS_VERSION=$(ls "$SDK_ROOT/build-tools" | sort -V | tail -n 1)
+          BUILD_TOOLS_PATH="$SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION"
+          echo "Build Tools Path: $BUILD_TOOLS_PATH"
+
+          # Pulisci il nome del branch per usarlo nel nome file (es. feature/test -> feature-test)
+          SAFE_BRANCH=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          SIGNED_APK_NAME="InstaEclipse-${SAFE_BRANCH}-build${{ github.run_number }}-signed.apk"
+          UNSIGNED_APK_NAME="InstaEclipse-${SAFE_BRANCH}-build${{ github.run_number }}-unsigned.apk"
+
+          # 3. Procedura di firma con gestione Fallback
+          SIGN_SUCCESS=false
+
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "Tentativo di firma con Keystore dai Secrets..."
+            if echo "$KEYSTORE_BASE64" | base64 -d > release.keystore 2>/dev/null; then
+              if "$BUILD_TOOLS_PATH/zipalign" -v -p 4 "$ORIGINAL_APK" aligned.apk 2>/dev/null; then
+                if "$BUILD_TOOLS_PATH/apksigner" sign \
+                  --ks release.keystore \
+                  --ks-pass "pass:$KEYSTORE_PASSWORD" \
+                  --ks-key-alias "$KEY_ALIAS" \
+                  --key-pass "pass:$KEY_PASSWORD" \
+                  --v1-signing-enabled true \
+                  --v2-signing-enabled true \
+                  --v3-signing-enabled true \
+                  --out "$SIGNED_APK_NAME" \
+                  aligned.apk 2>/dev/null; then
+                  
+                  if "$BUILD_TOOLS_PATH/apksigner" verify "$SIGNED_APK_NAME" 2>/dev/null; then
+                    echo "✅ APK firmato con successo tramite Secrets!"
+                    SIGN_SUCCESS=true
+                  fi
+                fi
+              fi
             fi
-
-            BUILD_TOOLS_DIR=$(ls -d$ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
-            "$BUILD_TOOLS_DIR/zipalign" -v -p 4 "$UNSIGNED_APK" aligned.apk
-            "$BUILD_TOOLS_DIR/apksigner" sign \
-              --ks release.keystore \
-              --ks-pass "pass:$KS_PASS" \
-              --ks-key-alias "$K_ALIAS" \
-              --key-pass "pass:$K_PASS" \
-              --out InstaEclipse-signed.apk \
-              aligned.apk
             rm -f release.keystore aligned.apk
+          else
+            echo "⚠️ Secrets di firma incompleti o non impostati. Si prova fallback con chiave generata..."
+            if keytool -genkeypair -v \
+              -keystore fallback.keystore \
+              -alias instaeclipse \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=InstaEclipse, OU=Dev, O=InstaEclipse, L=Rome, ST=RM, C=IT" 2>/dev/null; then
+              
+              if "$BUILD_TOOLS_PATH/zipalign" -v -p 4 "$ORIGINAL_APK" aligned.apk 2>/dev/null; then
+                if "$BUILD_TOOLS_PATH/apksigner" sign \
+                  --ks fallback.keystore \
+                  --ks-pass "pass:android" \
+                  --ks-key-alias "instaeclipse" \
+                  --key-pass "pass:android" \
+                  --v1-signing-enabled true \
+                  --v2-signing-enabled true \
+                  --v3-signing-enabled true \
+                  --out "$SIGNED_APK_NAME" \
+                  aligned.apk 2>/dev/null; then
+                  
+                  if "$BUILD_TOOLS_PATH/apksigner" verify "$SIGNED_APK_NAME" 2>/dev/null; then
+                    echo "✅ APK firmato con successo tramite Keystore locale/fallback!"
+                    SIGN_SUCCESS=true
+                  fi
+                fi
+              fi
+              rm -f fallback.keystore aligned.apk
+            fi
           fi
 
-          # Rinomina l'APK includendo il nome del branch sicuro per i file
-          SAFE_BRANCH_NAME=$(echo "${{ github.ref_name }}" | tr '/' '-')
-          mkdir -p output_apk
-          cp InstaEclipse-signed.apk output_apk/InstaEclipse-${SAFE_BRANCH_NAME}.apk
+          # 4. Fallback finale se la firma fallisce per qualsiasi motivo
+          if [ "$SIGN_SUCCESS" = true ]; then
+            echo "RELEASE_FILE=$SIGNED_APK_NAME" >> $GITHUB_ENV
+            echo "RELEASE_STATUS=Firmato" >> $GITHUB_ENV
+          else
+            echo "⚠️ Errore o login mancante nella procedura di firma. Attivazione procedura di backup (APK non firmato)..."
+            cp "$ORIGINAL_APK" "$UNSIGNED_APK_NAME"
+            echo "RELEASE_FILE=$UNSIGNED_APK_NAME" >> $GITHUB_ENV
+            echo "RELEASE_STATUS=Non firmato (Fallback attivo)" >> $GITHUB_ENV
+          fi
 
-      - name: Publish to GitHub Release per Branch
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: branch-${{ github.ref_name }}
-          name: "Release (${{ github.ref_name }})"
+          tag_name: release-${{ github.ref_name }}-build${{ github.run_number }}
+          name: "InstaEclipse [${{ github.ref_name }}] - Build #${{ github.run_number }}"
           body: |
-            Ultimo aggiornamento automatico per il branch **`${{ github.ref_name }}`**.
-            * **Commit:** `${{ github.sha }}`
-            * **Autore:** @${{ github.actor }}
+            ### Dettagli Build
+            - **Branch:** `${{ github.ref_name }}`
+            - **Stato Firma:** **${{ env.RELEASE_STATUS }}**
+            - **Commit SHA:** `${{ github.sha }}`
+            - **Autore:** @${{ github.actor }}
           files: |
-            output_apk/*.apk
+            ${{ env.RELEASE_FILE }}
           prerelease: false
-          # Usando make_latest: true o false decidi se sovrascrivere o meno la release principale (lasciamo gestito da softprops)
-          overwrite: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: true
