@@ -533,7 +533,10 @@ public class DialogUtils {
                 createSwitch(context, R.drawable.ic_live, "#5E5CE6", I18n.t(context, R.string.ig_dialog_quick_hide_live_seen),      FeatureFlags.quickToggleLive),
                 createSwitch(context, R.drawable.ic_timer, "#5E5CE6", I18n.t(context, R.string.ig_dialog_quick_keep_ephemeral),      FeatureFlags.quickToggleEphemeral),
                 createSwitch(context, R.drawable.ic_eye, "#5E5CE6", I18n.t(context, R.string.ig_dialog_quick_permanent_view),      FeatureFlags.quickTogglePermanentView),
-                createSwitch(context, R.drawable.ic_camera, "#5E5CE6", I18n.t(context, R.string.ig_dialog_quick_allow_screenshots),   FeatureFlags.quickToggleAllowScreenshots)};
+                createSwitch(context, R.drawable.ic_camera, "#5E5CE6", I18n.t(context, R.string.ig_dialog_quick_allow_screenshots),   FeatureFlags.quickToggleAllowScreenshots),
+                createSwitch(context, R.drawable.ic_eye_off, "#5E5CE6", I18n.t(context, R.string.ig_dialog_quick_hide_chats), FeatureFlags.quickToggleHideChats),
+                createSwitch(context, R.drawable.ic_folder, "#5E5CE6", I18n.t(context, R.string.ig_dialog_quick_hide_folder_bar), FeatureFlags.quickToggleHideFolderBar),
+                createSwitch(context, R.drawable.ic_folder, "#5E5CE6", I18n.t(context, R.string.ig_dialog_quick_empty_general), FeatureFlags.quickToggleEmptyGeneral)};
 
         // Create Enable/Disable All switch
         ToggleRow enableAllSwitch = createSwitch(context, I18n.t(context, R.string.ig_dialog_enable_disable_all), areAllEnabled(toggleSwitches));
@@ -585,6 +588,15 @@ public class DialogUtils {
                         break;
                     case 8:
                         FeatureFlags.quickToggleAllowScreenshots = isChecked;
+                        break;
+                    case 9:
+                        FeatureFlags.quickToggleHideChats = isChecked;
+                        break;
+                    case 10:
+                        FeatureFlags.quickToggleHideFolderBar = isChecked;
+                        break;
+                    case 11:
+                        FeatureFlags.quickToggleEmptyGeneral = isChecked;
                         break;
                 }
 
@@ -1769,7 +1781,10 @@ public class DialogUtils {
                 flagSwitch(context, R.drawable.ic_notification, "#0A84FF", R.string.ig_dialog_misc_show_feature_toasts, "showFeatureToasts"),
                 flagSwitch(context, R.drawable.ic_link, "#0A84FF", R.string.ig_dialog_open_links_externally, "openLinksExternally"),
                 createActionRow(context, R.drawable.ic_link, shareDomainLabel(context), "#0A84FF",
-                        v -> showShareDomainDialog(context, (TextView) findFirstText(v)))));
+                        v -> showShareDomainDialog(context, (android.widget.TextView) findFirstText(v))),
+                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_secret_menu_trigger), "#0A84FF", v -> showSecretMenuModeDialog(context, (android.widget.TextView) findFirstText(v))),
+                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_app_disguise), "#0A84FF", v -> showAppDisguiseDialog(context, (android.widget.TextView) findFirstText(v)))
+        ));
         showSectionDialog(context, I18n.t(context, R.string.menu_app), layout, () -> {});
     }
 
@@ -1797,6 +1812,8 @@ public class DialogUtils {
         hideCard.addView(flagSwitch(context, R.drawable.ic_eye_off, A_PRIVACY,
                 R.string.ie_show_hide_button, "showHideChatButton",
                 ps.reso.instaeclipse.mods.ghost.ConversationMenuHook::refreshAll));
+        hideCard.addView(flagSwitch(context, R.drawable.ic_eye_off, A_PRIVACY,
+                R.string.ig_dialog_batch_hide_chats, "enableBatchHideChats"));
 
         ToggleRow hideChatBackLongPress = createSwitch(context, R.drawable.ic_timer, A_PRIVACY,
                 I18n.t(context, R.string.ig_direct_hide_chat_back_long_press), FeatureFlags.hideChatBackLongPress);
