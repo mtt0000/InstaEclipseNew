@@ -18,16 +18,47 @@ import ps.reso.instaeclipse.utils.log.ModuleLog;
 public class CleanUiManager {
 
     private static final String[] UI_BUTTON_FLAGS = {
-        "showHideChatButton",
-        "showDeletedMessagesButton",
-        "jumpToFirstMessage",
-        "savedOnProfile",
-        "enableVoiceDownload",
-        "enableStickerDownload",
-        "forceReelScrubber",
-        "offerPlaybackSpeed",
-        "offerCopyImage",
-        "offerMediaInfo"
+        // === Direct Messages / Header e pulsanti di azione sui messaggi ===
+        "showHideChatButton",            // Pulsante nascondi/mostra chat nell'header dei DM
+        "showDeletedMessagesButton",     // Pulsante cronologia messaggi eliminati/annullati nell'header dei DM
+        "jumpToFirstMessage",            // Pulsante per scorrere al primo messaggio nell'header dei DM
+        "enableVoiceDownload",           // Icona/pulsante di download sulle bolle dei messaggi vocali
+        "enableStickerDownload",         // Icona/pulsante di download per sticker e GIF
+        "enableDmMediaDownload",         // Pulsante di salvataggio personalizzato su foto/video all'interno della chat
+
+        // === Quick Toggle nella Inbox dei DM ===
+        "quickToggleSeen",               // Icona/pulsante quick toggle del Ghost Mode accanto all'header della inbox
+
+        // === Pulsanti personalizzati nella schermata del Profilo ===
+        "savedOnProfile",                // Scorciatoia per la raccolta 'Elementi salvati' nell'header del profilo
+        "followersHistory",              // Scorciatoia per la cronologia/tracciamento dei follower sul profilo
+        "followListExport",              // Pulsante per esportare la lista follower/seguiti in formato CSV
+
+        // === Controlli overlay su Feed, Post e Reels ===
+        "enablePostDownload",            // Icona/pulsante di download personalizzato sui post del feed
+        "enableReelDownload",            // Pulsante di download nella vista Reels
+        "forceReelScrubber",             // Barra di avanzamento (seek-bar/scrubber) iniettata nei Reels
+        "offerPlaybackSpeed",            // Pulsante overlay per il controllo della velocità di riproduzione (0.5x - 3x)
+        "holdLeftSlowMotion",            // Controllo gesture in overlay per il rallentatore nei Reels
+        "enablePhotoZoom",               // Pulsante/trigger in overlay per lo zoom delle foto
+
+        // === Menu e azioni contestuali sui media ===
+        "copyMediaLink",                 // Pulsante/voce per copiare il link diretto
+        "offerCopyImage",                // Pulsante/voce per copiare l'immagine negli appunti
+        "offerMediaInfo",                // Pulsante per visualizzare i dettagli tecnici del media
+        "offerAudioDownload",            // Pulsante per scaricare solo la traccia audio
+        "uploadInstants",                // Pulsante picker della galleria iniettato per gli Instant
+        "saveInstants",                  // Pulsante per salvare gli Instant
+
+        // === Controlli iniettati nelle Storie ===
+        "enableStoryDownload",           // Pulsante di download nel visualizzatore delle storie
+        "storyInfo",                     // Pulsante/overlay con i dettagli della storia
+        "storyLinks",                    // Pulsanti per estrarre i link presenti nella storia
+        "enableStoryMentions",           // Pulsante per visualizzare tutte le menzioni della storia
+        "storyViewerSearch",             // Barra di ricerca iniettata nella lista degli spettatori della storia
+
+        // === Pulsanti iniettati per Sviluppatori e Diagnostica ===
+        "isDevEnabled"                   // Scorciatoia/pulsanti per le Opzioni Sviluppatore iniettate
     };
 
     public static synchronized void toggleCleanUi(Activity activity) {
@@ -36,41 +67,21 @@ public class CleanUiManager {
             try {
                 JSONObject json = new JSONObject();
 
-                json.put("showHideChatButton", FeatureFlags.showHideChatButton);
-                FeatureFlags.showHideChatButton = false;
-
-                json.put("showDeletedMessagesButton", FeatureFlags.showDeletedMessagesButton);
-                FeatureFlags.showDeletedMessagesButton = false;
-
-                json.put("jumpToFirstMessage", FeatureFlags.jumpToFirstMessage);
-                FeatureFlags.jumpToFirstMessage = false;
-
-                json.put("savedOnProfile", FeatureFlags.savedOnProfile);
-                FeatureFlags.savedOnProfile = false;
-
-                json.put("enableVoiceDownload", FeatureFlags.enableVoiceDownload);
-                FeatureFlags.enableVoiceDownload = false;
-
-                json.put("enableStickerDownload", FeatureFlags.enableStickerDownload);
-                FeatureFlags.enableStickerDownload = false;
-
-                json.put("forceReelScrubber", FeatureFlags.forceReelScrubber);
-                FeatureFlags.forceReelScrubber = false;
-
-                json.put("offerPlaybackSpeed", FeatureFlags.offerPlaybackSpeed);
-                FeatureFlags.offerPlaybackSpeed = false;
-
-                json.put("offerCopyImage", FeatureFlags.offerCopyImage);
-                FeatureFlags.offerCopyImage = false;
-
-                json.put("offerMediaInfo", FeatureFlags.offerMediaInfo);
-                FeatureFlags.offerMediaInfo = false;
+                for (String flag : UI_BUTTON_FLAGS) {
+                    try {
+                        java.lang.reflect.Field field = FeatureFlags.class.getField(flag);
+                        json.put(flag, field.getBoolean(null));
+                        field.setBoolean(null, false);
+                    } catch (Exception e) {
+                        ModuleLog.line("(InstaEclipse|CleanUI) Failed to snapshot flag " + flag + ": " + e.getMessage());
+                    }
+                }
 
                 FeatureFlags.cleanUiSavedSnapshot = json.toString();
                 FeatureFlags.isCleanUiActive = true;
 
                 IeToast.makeText(activity, I18n.t(activity, R.string.clean_ui_toast_on), Toast.LENGTH_SHORT).show();
-            } catch (JSONException e) {
+            } catch (Exception e) {
                 ModuleLog.line("(InstaEclipse|CleanUI) Failed to create snapshot: " + e.getMessage());
             }
         } else {
@@ -78,16 +89,16 @@ public class CleanUiManager {
             try {
                 JSONObject json = new JSONObject(FeatureFlags.cleanUiSavedSnapshot);
 
-                if (json.has("showHideChatButton")) FeatureFlags.showHideChatButton = json.getBoolean("showHideChatButton");
-                if (json.has("showDeletedMessagesButton")) FeatureFlags.showDeletedMessagesButton = json.getBoolean("showDeletedMessagesButton");
-                if (json.has("jumpToFirstMessage")) FeatureFlags.jumpToFirstMessage = json.getBoolean("jumpToFirstMessage");
-                if (json.has("savedOnProfile")) FeatureFlags.savedOnProfile = json.getBoolean("savedOnProfile");
-                if (json.has("enableVoiceDownload")) FeatureFlags.enableVoiceDownload = json.getBoolean("enableVoiceDownload");
-                if (json.has("enableStickerDownload")) FeatureFlags.enableStickerDownload = json.getBoolean("enableStickerDownload");
-                if (json.has("forceReelScrubber")) FeatureFlags.forceReelScrubber = json.getBoolean("forceReelScrubber");
-                if (json.has("offerPlaybackSpeed")) FeatureFlags.offerPlaybackSpeed = json.getBoolean("offerPlaybackSpeed");
-                if (json.has("offerCopyImage")) FeatureFlags.offerCopyImage = json.getBoolean("offerCopyImage");
-                if (json.has("offerMediaInfo")) FeatureFlags.offerMediaInfo = json.getBoolean("offerMediaInfo");
+                for (String flag : UI_BUTTON_FLAGS) {
+                    if (json.has(flag)) {
+                        try {
+                            java.lang.reflect.Field field = FeatureFlags.class.getField(flag);
+                            field.setBoolean(null, json.getBoolean(flag));
+                        } catch (Exception e) {
+                            ModuleLog.line("(InstaEclipse|CleanUI) Failed to restore flag " + flag + ": " + e.getMessage());
+                        }
+                    }
+                }
 
                 FeatureFlags.cleanUiSavedSnapshot = "";
                 FeatureFlags.isCleanUiActive = false;

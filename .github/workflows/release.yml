@@ -64,9 +64,15 @@ jobs:
       - name: Rename APK
         id: rename_apk
         run: |
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          # If signing was skipped, the APK is at app-release-unsigned.apk
+          # If signed using sign-android-release action, it usually outputs to the same dir and the action sets an env var
+          # Let's find the apk safely. If there are multiple, the signed one usually ends in signed.apk if modified, but let's just find the largest or most recent.
+
+          APK_PATH=$(find app/build/outputs/apk/release -maxdepth 1 -name "*.apk" | head -n 1)
 
           if [ "${{ env.SIGNING_LEVEL }}" == "1" ] || [ "${{ env.SIGNING_LEVEL }}" == "2" ]; then
+            # The sign-android-release action exports the signed APK path in SIGNED_RELEASE_FILE
+            APK_PATH="${{ env.SIGNED_RELEASE_FILE }}"
             NEW_APK_NAME="app-${{ github.ref_name }}-${{ env.SHORT_SHA }}-signed.apk"
           else
             NEW_APK_NAME="app-${{ github.ref_name }}-${{ env.SHORT_SHA }}-unsigned.apk"
