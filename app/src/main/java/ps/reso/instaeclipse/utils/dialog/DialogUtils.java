@@ -852,7 +852,7 @@ public class DialogUtils {
                 .choices(spoofDeviceNames(context), current, which -> {
                     FeatureFlags.spoofDevice = ids[which];
                     SettingsManager.saveAllFlags();
-                    if (label != null) label.setText(spoofDeviceLabel(context));
+                    if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(spoofDeviceLabel(context));
                     ps.reso.instaeclipse.utils.toast.IeToast.makeText(context,
                             I18n.t(context, R.string.ig_toast_restart_manual), Toast.LENGTH_LONG).show();
                 })
@@ -1382,7 +1382,7 @@ public class DialogUtils {
                 .choices(startupTabNames(context), current, which -> {
                     FeatureFlags.startupTab = tabs[which];
                     SettingsManager.saveAllFlags();
-                    if (label != null) label.setText(startupTabLabel(context));
+                    if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(startupTabLabel(context));
                 })
                 .show();
     }
@@ -1529,7 +1529,7 @@ public class DialogUtils {
                 .choices(rows, checked, which -> {
                     FeatureFlags.feedCornerRadius = FEED_CORNER_RADII[which];
                     SettingsManager.saveAllFlags();
-                    if (label != null) label.setText(feedCornerLabel(context));
+                    if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(feedCornerLabel(context));
                 })
                 .show();
     }
@@ -1590,7 +1590,7 @@ public class DialogUtils {
                 .choices(rows, checked, which -> {
                     FeatureFlags.storyTrayScale = STORY_TRAY_SIZES[which];
                     SettingsManager.saveAllFlags();
-                    if (label != null) label.setText(storyTraySizeLabel(context));
+                    if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(storyTraySizeLabel(context));
                 })
                 .show();
     }
@@ -1662,7 +1662,7 @@ public class DialogUtils {
     private static void saveStoryRingColor(Context context, String value, TextView label) {
         FeatureFlags.storyRingColor = value;
         SettingsManager.saveAllFlags();
-        if (label != null) label.setText(storyRingColorLabel(context));
+        if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(storyRingColorLabel(context));
         ps.reso.instaeclipse.utils.toast.IeToast.makeText(context,
                 I18n.t(context, R.string.ig_toast_restart_manual), Toast.LENGTH_SHORT).show();
     }
@@ -1782,10 +1782,46 @@ public class DialogUtils {
                 flagSwitch(context, R.drawable.ic_link, "#0A84FF", R.string.ig_dialog_open_links_externally, "openLinksExternally"),
                 createActionRow(context, R.drawable.ic_link, shareDomainLabel(context), "#0A84FF",
                         v -> showShareDomainDialog(context, (android.widget.TextView) findFirstText(v))),
-                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_secret_menu_trigger), "#0A84FF", v -> showSecretMenuModeDialog(context, (android.widget.TextView) findFirstText(v))),
-                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_app_disguise), "#0A84FF", v -> showAppDisguiseDialog(context, (android.widget.TextView) findFirstText(v)))
+                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_secret_menu_trigger), "#0A84FF", v -> { showSecretMenuModeDialog(context, (android.widget.TextView) findFirstText(v)); }),
+                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_app_disguise), "#0A84FF", v -> { showAppDisguiseDialog(context, (android.widget.TextView) findFirstText(v)); })
         ));
         showSectionDialog(context, I18n.t(context, R.string.menu_app), layout, () -> {});
+    }
+
+    private static void showSecretMenuModeDialog(Context context, android.widget.TextView label) {
+        String[] options = {I18n.t(context, R.string.ig_dialog_secret_menu_long_press), I18n.t(context, R.string.ig_dialog_secret_menu_double_tap_long_press)};
+        int selected = FeatureFlags.secretMenuDoubleTap ? 1 : 0;
+        new AlertDialog.Builder(context)
+                .setTitle(I18n.t(context, R.string.ig_dialog_secret_menu_trigger))
+                .setSingleChoiceItems(options, selected, (d, which) -> {
+                    FeatureFlags.secretMenuDoubleTap = (which == 1);
+                    SettingsManager.saveAllFlags();
+                    label.setText(I18n.t(context, R.string.ig_dialog_secret_menu_trigger) + "  ·  " + options[which]);
+                    d.dismiss();
+                }).show();
+    }
+
+    private static void showAppDisguiseDialog(Context context, android.widget.TextView label) {
+        String[] options = {"Default", "Calculator", "Notes", "File Manager", "Calendar", "Weather"};
+        String[] keys = {
+            ps.reso.instaeclipse.utils.core.AppDisguiseManager.DEFAULT,
+            ps.reso.instaeclipse.utils.core.AppDisguiseManager.CALCULATOR,
+            ps.reso.instaeclipse.utils.core.AppDisguiseManager.NOTES,
+            ps.reso.instaeclipse.utils.core.AppDisguiseManager.FILE_MANAGER,
+            ps.reso.instaeclipse.utils.core.AppDisguiseManager.CALENDAR,
+            ps.reso.instaeclipse.utils.core.AppDisguiseManager.WEATHER
+        };
+        int selected = java.util.Arrays.asList(keys).indexOf(FeatureFlags.appDisguise);
+        if (selected == -1) selected = 0;
+        new AlertDialog.Builder(context)
+                .setTitle(I18n.t(context, R.string.ig_dialog_app_disguise))
+                .setSingleChoiceItems(options, selected, (d, which) -> {
+                    String val = keys[which];
+                    ps.reso.instaeclipse.utils.core.AppDisguiseManager.applyDisguise(context, val);
+                    label.setText(I18n.t(context, R.string.ig_dialog_app_disguise) + "  ·  " + options[which]);
+                    android.widget.Toast.makeText(context, "Disguise changed. App restart might be required.", android.widget.Toast.LENGTH_LONG).show();
+                    d.dismiss();
+                }).show();
     }
 
     /** Top-level "Lock" section (Privacy group) — the grouped passcode-lock card. */
@@ -2074,7 +2110,7 @@ public class DialogUtils {
     private static void saveTimestampFormat(Context context, String pattern, TextView label) {
         FeatureFlags.exactTimestampFormat = pattern;
         SettingsManager.saveAllFlags();
-        if (label != null) label.setText(timestampFormatLabel(context));
+        if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(timestampFormatLabel(context));
     }
 
     private static String shareDomainLabel(Context context) {
@@ -2116,7 +2152,7 @@ public class DialogUtils {
                 }
                 FeatureFlags.customShareDomain = domain;
                 SettingsManager.saveAllFlags();
-                if (label != null) label.setText(shareDomainLabel(context));
+                if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(shareDomainLabel(context));
             });
             dlg.show();
         } catch (Throwable ignored) {}
@@ -2435,7 +2471,7 @@ public class DialogUtils {
                     FeatureFlags.downloaderUseOriginal = ceilings[which] < 0;
                     if (ceilings[which] >= 0) FeatureFlags.downloaderQualityMaxShortSide = ceilings[which];
                     SettingsManager.saveAllFlags();
-                    if (label != null) label.setText(I18n.t(context, R.string.ie_download_quality) + " · " + downloadModeLabel(context));
+                    if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(I18n.t(context, R.string.ie_download_quality) + " · " + downloadModeLabel(context));
                     onChange.run();
                 })
                 .show();
