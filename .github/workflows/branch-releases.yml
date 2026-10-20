@@ -90,4 +90,4 @@ jobs:
             --target "$SHA" \
             --title "Build: $BRANCH_NAME" \
             --notes "Ultimo aggiornamento per il branch \`$BRANCH_NAME\` al commit \`$SHA\`." \
-            --prerelease
+            --latest
