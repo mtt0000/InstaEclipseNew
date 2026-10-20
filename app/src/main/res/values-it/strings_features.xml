@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <!-- Features tab: search + per-category counts -->
+
     <string name="feat_search_hint">Cerca funzionalità</string>
     <string name="feat_search_no_results">Nessuna funzionalità trovata</string>
     <string name="feat_count_on">%1$d attive</string>
@@ -9,6 +9,8 @@
     <string name="ig_direct_back_long_press_duration">Durata pressione tasto Indietro</string>
     <string name="ig_direct_empty_general_folder">Mostra cartella \'Generale\' vuota</string>
     <string name="ig_direct_hide_folders_bar">Nascondi barra delle cartelle</string>
+
+    <!-- Clean UI Quick Toggle -->
     <string name="clean_ui_toggle_title">Quick Toggle Pulsanti UI</string>
     <string name="clean_ui_gesture_mode">Scorciatoia Tasto Home</string>
     <string name="clean_ui_gesture_off">Disattivato</string>
@@ -16,4 +18,19 @@
     <string name="clean_ui_gesture_double_tap_long">2 Tap + Pressione prolungata</string>
     <string name="clean_ui_toast_on">Clean UI: Attivata (Pulsanti nascosti)</string>
     <string name="clean_ui_toast_off">Clean UI: Disattivata (Pulsanti ripristinati)</string>
+
+    <!-- Secret Menu, Batch Hide & App Disguise -->
+    <string name="ig_dialog_secret_menu_trigger">Apertura Menù Segreto</string>
+    <string name="ig_dialog_secret_menu_long_press">Pressione prolungata</string>
+    <string name="ig_dialog_secret_menu_double_tap_long_press">2 tocchi + pressione prolungata</string>
+    <string name="ig_dialog_batch_hide_chats">Nascondi chat in blocco dal menù selezione</string>
+    <string name="ig_dialog_quick_hide_chats">Includi Nascondi Specifiche Chat</string>
+    <string name="ig_dialog_quick_hide_folder_bar">Includi Nascondi Barra Cartelle</string>
+    <string name="ig_dialog_quick_empty_general">Includi Svuota Cartella Generali</string>
+    <string name="ig_dialog_app_disguise">Nascondi App (Icona e Nome)</string>
+    <string name="app_name_calculator">Calcolatrice</string>
+    <string name="app_name_notes">Note</string>
+    <string name="app_name_file_manager">File Manager</string>
+    <string name="app_name_calendar">Calendario</string>
+    <string name="app_name_weather">Meteo</string>
 </resources>
