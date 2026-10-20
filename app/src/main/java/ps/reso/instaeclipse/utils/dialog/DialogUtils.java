@@ -1362,9 +1362,16 @@ public class DialogUtils {
         layout.addView(sectionHeader(context, I18n.t(context, R.string.menu_nav_gestures)));
         layout.addView(cardOf(context,
                 extraSwitch(context, "#30D158", "disableSwipeToCamera"),
-                flagSwitch(context, R.drawable.ic_home, "#30D158", R.string.ig_back_leaves_home, "backLeavesHome"),
+                flagSwitch(context, R.drawable.ic_home, "#30D158", R.string.ig_back_leaves_home, "backLeavesHome")));
+
+
+        layout.addView(sectionHeader(context, I18n.t(context, R.string.menu_nav_shortcuts)));
+        layout.addView(cardOf(context,
                 createActionRow(context, R.drawable.ic_tune, I18n.t(context, R.string.clean_ui_toggle_title), "#30D158",
-                        v -> showCleanUiGestureDialog(context))));
+                        v -> showCleanUiGestureDialog(context)),
+                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_secret_menu_trigger), "#30D158",
+                        v -> showSecretMenuModeDialog(context))
+        ));
 
         showSectionDialog(context, I18n.t(context, R.string.menu_navigation), layout, () -> {});
     }
@@ -1846,23 +1853,22 @@ public class DialogUtils {
                 flagSwitch(context, R.drawable.ic_link, "#0A84FF", R.string.ig_dialog_open_links_externally, "openLinksExternally"),
                 createActionRow(context, R.drawable.ic_link, shareDomainLabel(context), "#0A84FF",
                         v -> showShareDomainDialog(context, (android.widget.TextView) findFirstText(v))),
-                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_secret_menu_trigger), "#0A84FF", v -> { showSecretMenuModeDialog(context, (android.widget.TextView) findFirstText(v)); }),
                 createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_app_disguise), "#0A84FF", v -> { showAppDisguiseDialog(context, (android.widget.TextView) findFirstText(v)); })
         ));
         showSectionDialog(context, I18n.t(context, R.string.menu_app), layout, () -> {});
     }
 
-    private static void showSecretMenuModeDialog(Context context, android.widget.TextView label) {
+    private static void showSecretMenuModeDialog(Context context) {
         String[] options = {I18n.t(context, R.string.ig_dialog_secret_menu_long_press), I18n.t(context, R.string.ig_dialog_secret_menu_double_tap_long_press)};
         int selected = FeatureFlags.secretMenuDoubleTap ? 1 : 0;
-        new AlertDialog.Builder(context)
-                .setTitle(I18n.t(context, R.string.ig_dialog_secret_menu_trigger))
-                .setSingleChoiceItems(options, selected, (d, which) -> {
+        IeDialog dialog = new IeDialog(context)
+                .title(I18n.t(context, R.string.ig_dialog_secret_menu_trigger))
+                .choices(options, selected, which -> {
                     FeatureFlags.secretMenuDoubleTap = (which == 1);
                     SettingsManager.saveAllFlags();
-                    label.setText(I18n.t(context, R.string.ig_dialog_secret_menu_trigger) + "  ·  " + options[which]);
-                    d.dismiss();
-                }).show();
+                });
+        dialog.secondary(context.getString(android.R.string.cancel), null);
+        dialog.show();
     }
 
     private static void showAppDisguiseDialog(Context context, android.widget.TextView label) {

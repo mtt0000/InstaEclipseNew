@@ -1330,8 +1330,14 @@ public class FeaturesFragment extends Fragment {
         defs.add(getString(R.string.menu_nav_gestures));
         defs.add(Arrays.asList(
                 createExtrasSwitch("#30D158", "disableSwipeToCamera"),
-                createSwitch(R.drawable.ic_home, "#30D158", getString(R.string.ig_back_leaves_home), "backLeavesHome"),
-                createClickable(R.drawable.ic_tune, "#30D158", getString(R.string.clean_ui_toggle_title), this::showCleanUiGestureDialog)
+                createSwitch(R.drawable.ic_home, "#30D158", getString(R.string.ig_back_leaves_home), "backLeavesHome")
+        ));
+
+
+        defs.add(getString(R.string.menu_nav_shortcuts));
+        defs.add(java.util.Arrays.asList(
+                createClickable(R.drawable.ic_tune, "#30D158", getString(R.string.clean_ui_toggle_title), this::showCleanUiGestureDialog),
+                createClickable(R.drawable.ic_settings_gear, "#30D158", getString(R.string.ig_dialog_secret_menu_trigger) + "  ·  " + (localCache.getBoolean("secretMenuDoubleTap", false) ? getString(R.string.ig_dialog_secret_menu_double_tap_long_press) : getString(R.string.ig_dialog_secret_menu_long_press)), () -> { showSecretMenuModeDialog(); })
         ));
 
         return defs;
@@ -1426,20 +1432,15 @@ public class FeaturesFragment extends Fragment {
     }
 
     /** Custom share domain (saved as the "customShareDomain" string pref). */
-        private void showSecretMenuModeDialog(android.view.View trigger) {
+        private void showSecretMenuModeDialog() {
         String[] options = {getString(R.string.ig_dialog_secret_menu_long_press), getString(R.string.ig_dialog_secret_menu_double_tap_long_press)};
         int selected = localCache.getBoolean("secretMenuDoubleTap", false) ? 1 : 0;
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.ig_dialog_secret_menu_trigger)
                 .setSingleChoiceItems(options, selected, (d, which) -> {
-                    boolean val = (which == 1);
-                    localCache.edit().putBoolean("secretMenuDoubleTap", val).apply();
-                    ps.reso.instaeclipse.utils.feature.FeatureFlags.secretMenuDoubleTap = val;
-                    if (trigger instanceof android.widget.TextView) {
-                        ((android.widget.TextView) trigger).setText(getString(R.string.ig_dialog_secret_menu_trigger) + "  ·  " + options[which]);
-                    }
+                    putBoolPref("secretMenuDoubleTap", which == 1);
                     d.dismiss();
-                    try { java.lang.reflect.Method m = getClass().getDeclaredMethod("syncToModule"); m.setAccessible(true); m.invoke(this); } catch (Exception ignored) {}
+                    loadNavigationMenu();
                 }).show();
     }
 
@@ -1831,7 +1832,6 @@ public class FeaturesFragment extends Fragment {
                 createSwitch(R.drawable.ic_notification, "#0A84FF", getString(R.string.ig_dialog_misc_show_feature_toasts), "showFeatureToasts"),
                 createSwitch(R.drawable.ic_link, "#0A84FF", getString(R.string.ig_dialog_open_links_externally), "openLinksExternally"),
                 createClickable(R.drawable.ic_link, "#0A84FF", shareDomainLabel(), this::showShareDomainDialog),
-                createClickable(R.drawable.ic_settings_gear, "#0A84FF", getString(R.string.ig_dialog_secret_menu_trigger) + "  ·  " + (localCache.getBoolean("secretMenuDoubleTap", false) ? getString(R.string.ig_dialog_secret_menu_double_tap_long_press) : getString(R.string.ig_dialog_secret_menu_long_press)), () -> { showSecretMenuModeDialog(null); }),
                 createClickable(R.drawable.ic_settings_gear, "#0A84FF", getString(R.string.ig_dialog_app_disguise), () -> { showAppDisguiseDialog(null); })
         ));
         // Auto-clear cache (mirrors the in-IG dialog's Tools section).

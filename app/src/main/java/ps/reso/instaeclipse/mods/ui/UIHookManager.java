@@ -389,11 +389,11 @@ public class UIHookManager {
         });
     }
 
-    private static void applySearchHook(Activity activity, View v) {
+    private static void applySearchHook(android.app.Activity activity, android.view.View v) {
         if (!FeatureFlags.secretMenuDoubleTap) {
             v.setOnLongClickListener(view -> {
-                DialogUtils.showEclipseOptionsDialog(activity);
-                VibrationUtil.vibrate(activity);
+                ps.reso.instaeclipse.utils.dialog.DialogUtils.showEclipseOptionsDialog(activity);
+                ps.reso.instaeclipse.mods.ui.utils.VibrationUtil.vibrate(activity);
                 return true;
             });
             v.setOnTouchListener(null);
@@ -401,43 +401,82 @@ public class UIHookManager {
         }
 
         v.setOnLongClickListener(null); // remove standard listener to avoid conflicts
-        v.setOnTouchListener(new View.OnTouchListener() {
-            private int tapCount = 0;
-            private long lastTapTime = 0;
+        v.setOnTouchListener(new android.view.View.OnTouchListener() {
+            private static final int DOUBLE_TAP_TIMEOUT = android.view.ViewConfiguration.getDoubleTapTimeout(); // ~300ms
+            private static final int LONG_PRESS_TIMEOUT = android.view.ViewConfiguration.getLongPressTimeout(); // ~500ms
+
             private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-            private final Runnable resetTaps = () -> tapCount = 0;
-            private final Runnable longPressAction = () -> {
-                if (tapCount == 2) {
-                    DialogUtils.showEclipseOptionsDialog(activity);
-                    ps.reso.instaeclipse.mods.ui.utils.VibrationUtil.vibrate(activity);
-                    tapCount = 0;
-                }
+            private final Runnable longPressRunnable = () -> {
+                gestureExecuted = true;
+                isWaitingForHold = false;
+                ps.reso.instaeclipse.mods.ui.utils.VibrationUtil.vibrate(activity);
+                ps.reso.instaeclipse.utils.dialog.DialogUtils.showEclipseOptionsDialog(activity);
             };
+            private long lastTapTime = 0;
+            private boolean isWaitingForHold = false;
+            private boolean gestureExecuted = false;
 
             @Override
-            public boolean onTouch(View view, android.view.MotionEvent event) {
-                switch (event.getAction()) {
-                    case android.view.MotionEvent.ACTION_DOWN:
-                        long time = System.currentTimeMillis();
-                        if (time - lastTapTime > 350) {
-                            tapCount = 0;
-                        }
-                        tapCount++;
-                        lastTapTime = time;
-                        handler.removeCallbacks(resetTaps);
-                        handler.removeCallbacks(longPressAction);
-
-                        if (tapCount == 3) {
-                            handler.postDelayed(longPressAction, 450);
-                        }
-                        break;
-                    case android.view.MotionEvent.ACTION_UP:
-                    case android.view.MotionEvent.ACTION_CANCEL:
-                        handler.removeCallbacks(longPressAction);
-                        handler.postDelayed(resetTaps, 350);
-                        break;
+            public boolean onTouch(android.view.View view, android.view.MotionEvent event) {
+                if (!FeatureFlags.secretMenuDoubleTap) {
+                    return false;
                 }
-                return false; // Let normal clicks through
+
+                switch (event.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN: {
+                        long now = android.os.SystemClock.uptimeMillis();
+                        if (now - lastTapTime <= DOUBLE_TAP_TIMEOUT) {
+                            isWaitingForHold = true;
+                            gestureExecuted = false;
+                            if (view.getParent() != null) {
+                                view.getParent().requestDisallowInterceptTouchEvent(true);
+                            }
+                            handler.postDelayed(longPressRunnable, LONG_PRESS_TIMEOUT);
+                            return true;
+                        } else {
+                            lastTapTime = now;
+                            isWaitingForHold = false;
+                            gestureExecuted = false;
+                            return false;
+                        }
+                    }
+
+                    case android.view.MotionEvent.ACTION_MOVE: {
+                        if (isWaitingForHold) {
+                            int slop = android.view.ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
+                            if (Math.abs(event.getX()) > slop || Math.abs(event.getY()) > slop) {
+                                handler.removeCallbacks(longPressRunnable);
+                                isWaitingForHold = false;
+                            }
+                            return true;
+                        }
+                        break;
+                    }
+
+                    case android.view.MotionEvent.ACTION_UP: {
+                        if (isWaitingForHold) {
+                            handler.removeCallbacks(longPressRunnable);
+                            isWaitingForHold = false;
+                            lastTapTime = 0;
+                            return true;
+                        }
+                        if (gestureExecuted) {
+                            gestureExecuted = false;
+                            lastTapTime = 0;
+                            return true;
+                        }
+                        break;
+                    }
+
+                    case android.view.MotionEvent.ACTION_CANCEL: {
+                        handler.removeCallbacks(longPressRunnable);
+                        isWaitingForHold = false;
+                        gestureExecuted = false;
+                        lastTapTime = 0;
+                        break;
+                    }
+                }
+                return false;
             }
         });
     }
