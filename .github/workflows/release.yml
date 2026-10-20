@@ -64,12 +64,15 @@ jobs:
       - name: Rename APK
         id: rename_apk
         run: |
+          # Sanitize branch name to prevent slashes from creating subdirectories during rename
+          SAFE_BRANCH_NAME=$(echo "${{ github.ref_name }}" | tr '/' '-')
+
           if [ "${{ env.SIGNING_LEVEL }}" == "1" ] || [ "${{ env.SIGNING_LEVEL }}" == "2" ]; then
             APK_PATH="${{ env.SIGNED_RELEASE_FILE }}"
-            NEW_APK_NAME="app-${{ github.ref_name }}-${{ env.SHORT_SHA }}-signed.apk"
+            NEW_APK_NAME="app-${SAFE_BRANCH_NAME}-${{ env.SHORT_SHA }}-signed.apk"
           else
             APK_PATH=$(find app/build/outputs/apk/release -maxdepth 1 -name "*.apk" | head -n 1)
-            NEW_APK_NAME="app-${{ github.ref_name }}-${{ env.SHORT_SHA }}-unsigned.apk"
+            NEW_APK_NAME="app-${SAFE_BRANCH_NAME}-${{ env.SHORT_SHA }}-unsigned.apk"
           fi
 
           mv "$APK_PATH" "app/build/outputs/apk/release/$NEW_APK_NAME"
