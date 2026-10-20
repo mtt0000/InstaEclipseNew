@@ -2,10 +2,18 @@ package ps.reso.instaeclipse.mods.ui.utils;
 
 import android.app.Activity;
 import android.content.Context;
+import android.view.View;
 import android.widget.Toast;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.WeakHashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 import ps.reso.instaeclipse.R;
 import ps.reso.instaeclipse.mods.ghost.HideChatsHook;
@@ -59,6 +67,17 @@ public class CleanUiManager {
         "isDevEnabled"
     };
 
+    private static final List<WeakReference<View>> sRegisteredInjectedViews = new ArrayList<>();
+    private static final Map<View, Integer> sRegisteredInjectedViewsState = new WeakHashMap<>();
+
+    public static void trackInjectedView(View view) {
+        if (view == null) return;
+        sRegisteredInjectedViews.add(new WeakReference<>(view));
+        if (FeatureFlags.isCleanUiActive) {
+            view.setVisibility(View.GONE);
+        }
+    }
+
     public static synchronized void toggleCleanUi(Activity activity) {
         if (!FeatureFlags.isCleanUiActive) {
             // Take snapshot and set all to false
@@ -76,6 +95,18 @@ public class CleanUiManager {
                 }
 
                 FeatureFlags.cleanUiSavedSnapshot = json.toString();
+
+                Iterator<WeakReference<View>> iterator = sRegisteredInjectedViews.iterator();
+                while (iterator.hasNext()) {
+                    View view = iterator.next().get();
+                    if (view != null) {
+                        sRegisteredInjectedViewsState.put(view, view.getVisibility());
+                        view.setVisibility(View.GONE);
+                    } else {
+                        iterator.remove();
+                    }
+                }
+
                 FeatureFlags.isCleanUiActive = true;
 
                 IeToast.makeText(activity, I18n.t(activity, R.string.clean_ui_toast_on), Toast.LENGTH_SHORT).show();
@@ -97,6 +128,22 @@ public class CleanUiManager {
                         }
                     }
                 }
+
+                Iterator<WeakReference<View>> iterator = sRegisteredInjectedViews.iterator();
+                while (iterator.hasNext()) {
+                    View view = iterator.next().get();
+                    if (view != null) {
+                        Integer state = sRegisteredInjectedViewsState.get(view);
+                        if (state != null) {
+                            view.setVisibility(state);
+                        } else {
+                            view.setVisibility(View.VISIBLE);
+                        }
+                    } else {
+                        iterator.remove();
+                    }
+                }
+                sRegisteredInjectedViewsState.clear();
 
                 FeatureFlags.cleanUiSavedSnapshot = "";
                 FeatureFlags.isCleanUiActive = false;

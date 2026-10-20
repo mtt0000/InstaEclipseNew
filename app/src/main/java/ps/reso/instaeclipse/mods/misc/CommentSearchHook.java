@@ -356,6 +356,7 @@ public class CommentSearchHook {
                     pill.setText("🔍");
                     pill.setContentDescription(I18n.t(ctx, R.string.ig_comment_search));
                     row.addView(pill, hl);
+                    ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(pill);
                     if (!(row instanceof FrameLayout)) { // centred like the title: move it to the row start
                         final int margin = (int) (12 * d);
                         pill.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
@@ -370,10 +371,11 @@ public class CommentSearchHook {
             }
         }
         try {
-            if (g instanceof FrameLayout) { g.addView(pill, lp); pill.bringToFront(); }
+            if (g instanceof FrameLayout) { g.addView(pill, lp); pill.bringToFront(); ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(pill); }
             else {
                 FrameLayout overlay = new FrameLayout(ctx);
                 overlay.addView(pill, lp);
+                ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(pill);
                 g.addView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             }
         } catch (Throwable t) {
