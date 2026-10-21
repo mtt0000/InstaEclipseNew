@@ -27,6 +27,7 @@ public class GhostEmojiManager {
             if (iv == null) return;
 
             sTintedView = iv;
+            ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(iv);
 
             if (showGhost) {
                 iv.setColorFilter(Color.parseColor("#FFD700"), PorterDuff.Mode.SRC_ATOP);

@@ -389,58 +389,106 @@ public class UIHookManager {
         });
     }
 
-    private static void applySearchHook(Activity activity, View v) {
-        if (!FeatureFlags.secretMenuDoubleTap) {
-            v.setOnLongClickListener(view -> {
-                DialogUtils.showEclipseOptionsDialog(activity);
-                VibrationUtil.vibrate(activity);
-                return true;
-            });
-            v.setOnTouchListener(null);
-            return;
-        }
+            private static void applySearchHook(android.app.Activity activity, android.view.View v) {
+    v.setOnLongClickListener(null); // Lasciamo il controllo esclusivo all'OnTouchListener per evitare interferenze
 
-        v.setOnLongClickListener(null); // remove standard listener to avoid conflicts
-        v.setOnTouchListener(new View.OnTouchListener() {
-            private int tapCount = 0;
-            private long lastTapTime = 0;
-            private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-            private final Runnable resetTaps = () -> tapCount = 0;
-            private final Runnable longPressAction = () -> {
-                if (tapCount == 2) {
-                    DialogUtils.showEclipseOptionsDialog(activity);
-                    ps.reso.instaeclipse.mods.ui.utils.VibrationUtil.vibrate(activity);
-                    tapCount = 0;
-                }
-            };
+    v.setOnTouchListener(new android.view.View.OnTouchListener() {
+        private static final int DOUBLE_TAP_TIMEOUT = 350; // ms
+        private static final int LONG_PRESS_TIMEOUT = 500;  // ms
 
-            @Override
-            public boolean onTouch(View view, android.view.MotionEvent event) {
-                switch (event.getAction()) {
-                    case android.view.MotionEvent.ACTION_DOWN:
-                        long time = System.currentTimeMillis();
-                        if (time - lastTapTime > 350) {
-                            tapCount = 0;
+        private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        private long lastTapTime = 0;
+        private boolean isWaitingForHold = false;
+        private boolean gestureExecuted = false;
+
+        private final Runnable longPressRunnable = () -> {
+            gestureExecuted = true;
+            isWaitingForHold = false;
+            ps.reso.instaeclipse.mods.ui.utils.VibrationUtil.vibrate(activity);
+            ps.reso.instaeclipse.utils.dialog.DialogUtils.showEclipseOptionsDialog(activity);
+        };
+
+        @Override
+        public boolean onTouch(android.view.View view, android.view.MotionEvent event) {
+            boolean doubleTapMode = ps.reso.instaeclipse.utils.feature.FeatureFlags.secretMenuDoubleTap;
+
+            switch (event.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN: {
+                    long now = android.os.SystemClock.uptimeMillis();
+
+                    if (!doubleTapMode) {
+                        // MODALITÀ SOLO LONG PRESS
+                        isWaitingForHold = true;
+                        gestureExecuted = false;
+                        if (view.getParent() != null) {
+                            view.getParent().requestDisallowInterceptTouchEvent(true);
                         }
-                        tapCount++;
-                        lastTapTime = time;
-                        handler.removeCallbacks(resetTaps);
-                        handler.removeCallbacks(longPressAction);
-
-                        if (tapCount == 3) {
-                            handler.postDelayed(longPressAction, 450);
+                        handler.postDelayed(longPressRunnable, LONG_PRESS_TIMEOUT);
+                        return true;
+                    } else {
+                        // MODALITÀ DOUBLE TAP + LONG PRESS
+                        if (now - lastTapTime <= DOUBLE_TAP_TIMEOUT) {
+                            // Secondo tocco entro il tempo utile: parte il timer del long press
+                            isWaitingForHold = true;
+                            gestureExecuted = false;
+                            if (view.getParent() != null) {
+                                view.getParent().requestDisallowInterceptTouchEvent(true);
+                            }
+                            handler.postDelayed(longPressRunnable, LONG_PRESS_TIMEOUT);
+                            return true;
+                        } else {
+                            // Primo tocco: memorizziamo il timestamp
+                            lastTapTime = now;
+                            isWaitingForHold = false;
+                            gestureExecuted = false;
+                            // Lasciamo passare l'evento per consentire il click nativo se non segue un secondo tocco
+                            return false;
                         }
-                        break;
-                    case android.view.MotionEvent.ACTION_UP:
-                    case android.view.MotionEvent.ACTION_CANCEL:
-                        handler.removeCallbacks(longPressAction);
-                        handler.postDelayed(resetTaps, 350);
-                        break;
+                    }
                 }
-                return false; // Let normal clicks through
+
+                case android.view.MotionEvent.ACTION_MOVE: {
+                    if (isWaitingForHold) {
+                        int slop = android.view.ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
+                        if (Math.abs(event.getX()) > slop || Math.abs(event.getY()) > slop) {
+                            handler.removeCallbacks(longPressRunnable);
+                            isWaitingForHold = false;
+                        }
+                        return true;
+                    }
+                    break;
+                }
+
+                case android.view.MotionEvent.ACTION_UP: {
+                    if (isWaitingForHold) {
+                        handler.removeCallbacks(longPressRunnable);
+                        isWaitingForHold = false;
+                        if (!doubleTapMode) {
+                            // Era un tocco rapido in modalità long press: eseguiamo il click nativo
+                            view.performClick();
+                        }
+                        return true;
+                    }
+                    if (gestureExecuted) {
+                        gestureExecuted = false;
+                        lastTapTime = 0;
+                        return true; // Consumato per evitare la ricerca nativa di Instagram
+                    }
+                    break;
+                }
+
+                case android.view.MotionEvent.ACTION_CANCEL: {
+                    handler.removeCallbacks(longPressRunnable);
+                    isWaitingForHold = false;
+                    gestureExecuted = false;
+                    lastTapTime = 0;
+                    break;
+                }
             }
-        });
-    }
+            return false;
+        }
+    });
+}
 
     private static void processSearchView(Activity activity, View view, String id) {
         if (id.equals("action_bar_end_action_buttons") && view instanceof ViewGroup container) {
