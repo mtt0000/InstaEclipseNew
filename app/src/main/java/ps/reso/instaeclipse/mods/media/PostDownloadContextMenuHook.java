@@ -315,7 +315,8 @@ public class PostDownloadContextMenuHook {
                 boolean wantCopyImage = FeatureFlags.offerCopyImage && copyImageOptionValue != null;
                 boolean wantInfo = FeatureFlags.offerMediaInfo && mediaInfoOptionValue != null;
                 boolean wantSpeed = FeatureFlags.offerPlaybackSpeed && speedOptionValue != null;
-                boolean wantCounts = FeatureFlags.postCountSpoof && countsOptionValue != null;
+                // Clean UI hides the "Edit counts" row; the spoofed counts themselves stay.
+                boolean wantCounts = FeatureFlags.postCountSpoof && !FeatureFlags.isCleanUiActive && countsOptionValue != null;
                 if (!wantDownload && !wantCopyLink && !wantCopyImage && !wantInfo && !wantSpeed && !wantCounts) return;
 
                 // Don't react to our own target option types (suppressed in beforeHook)

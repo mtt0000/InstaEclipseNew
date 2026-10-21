@@ -92,7 +92,7 @@ public class FeatureFlags {
     public static volatile boolean confirmFeedRefresh = false; // ask before pull-to-refresh reloads the home feed (#278)
     public static volatile boolean hideLikedPosts = false; // drop already-liked posts from the feed at parse time (#249)
     public static volatile boolean hideSpecificChats = false; // hide chosen DM threads from the inbox (per-thread)
-    public static volatile boolean secretMenuDoubleTap = false;
+    public static volatile boolean secretMenuDoubleTap = false; // Search: open the secret menu with 2 taps + long press instead of a long press
     public static volatile boolean enableBatchHideChats = false;
     public static volatile boolean quickToggleHideChats = false;
     public static volatile boolean quickToggleHideFolderBar = false;
@@ -103,11 +103,13 @@ public class FeatureFlags {
     public static volatile boolean emptyGeneralFolder = false;
     public static volatile boolean hideDirectFoldersBar = false;
 
-    // Which ghost mode features the quick toggle will control
-    public static volatile int cleanUiToggleGesture = 0; // 0 = Off, 1 = Long Press, 2 = 2 Tap + Long Press
+    // Nav bar shortcuts (NavGestureBinder): 0 = Off, 1 = Long Press, 2 = 2 Taps + Long Press
+    public static volatile int cleanUiToggleGesture = 0; // Home button: Clean UI quick toggle
+    public static volatile int ghostToggleGesture = 1;   // Messages / inbox button: Ghost Mode quick toggle
     public static volatile boolean isCleanUiActive = false;
     public static volatile String cleanUiSavedSnapshot = "";
 
+    // Which ghost mode features the quick toggle will control
     public static volatile boolean quickToggleSeen = false;
     public static volatile boolean quickToggleTyping = false;
     public static volatile boolean quickToggleScreenshot = false;

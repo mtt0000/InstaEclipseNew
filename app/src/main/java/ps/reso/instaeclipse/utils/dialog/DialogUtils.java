@@ -1364,30 +1364,61 @@ public class DialogUtils {
                 extraSwitch(context, "#30D158", "disableSwipeToCamera"),
                 flagSwitch(context, R.drawable.ic_home, "#30D158", R.string.ig_back_leaves_home, "backLeavesHome")));
 
-
+        // Long press / 2 taps + long press on the bottom-nav buttons (NavGestureBinder).
         layout.addView(sectionHeader(context, I18n.t(context, R.string.menu_nav_shortcuts)));
         layout.addView(cardOf(context,
-                createActionRow(context, R.drawable.ic_tune, I18n.t(context, R.string.clean_ui_toggle_title), "#30D158",
-                        v -> showCleanUiGestureDialog(context)),
-                createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_secret_menu_trigger), "#30D158",
-                        v -> showSecretMenuModeDialog(context))
-        ));
+                createActionRow(context, R.drawable.ic_search, navShortcutLabel(context, R.string.nav_shortcut_search,
+                                secretMenuGestureIndex() + 1), "#30D158",
+                        v -> showNavShortcutDialog(context, (TextView) findFirstText(v), R.string.nav_shortcut_search)),
+                createActionRow(context, R.drawable.ic_chat, navShortcutLabel(context, R.string.nav_shortcut_direct,
+                                FeatureFlags.ghostToggleGesture), "#30D158",
+                        v -> showNavShortcutDialog(context, (TextView) findFirstText(v), R.string.nav_shortcut_direct)),
+                createActionRow(context, R.drawable.ic_home, navShortcutLabel(context, R.string.nav_shortcut_home,
+                                FeatureFlags.cleanUiToggleGesture), "#30D158",
+                        v -> showNavShortcutDialog(context, (TextView) findFirstText(v), R.string.nav_shortcut_home))));
 
         showSectionDialog(context, I18n.t(context, R.string.menu_navigation), layout, () -> {});
     }
 
-    private static void showCleanUiGestureDialog(Context context) {
-        String[] options = new String[]{
+    /** Secret menu has no "Off" (it is the only way in): 0 = long press, 1 = 2 taps + long press. */
+    private static int secretMenuGestureIndex() {
+        return FeatureFlags.secretMenuDoubleTap ? 1 : 0;
+    }
+
+    /** Off / Long press / 2 taps + long press, indexed like FeatureFlags' gesture ints. */
+    private static String[] navGestureNames(Context context) {
+        return new String[]{
                 I18n.t(context, R.string.clean_ui_gesture_off),
                 I18n.t(context, R.string.clean_ui_gesture_long_press),
-                I18n.t(context, R.string.clean_ui_gesture_double_tap_long)
-        };
-        int current = FeatureFlags.cleanUiToggleGesture;
+                I18n.t(context, R.string.clean_ui_gesture_double_tap_long)};
+    }
+
+    private static String navShortcutLabel(Context context, int titleRes, int gesture) {
+        String[] names = navGestureNames(context);
+        return I18n.t(context, titleRes) + "  ·  " + names[Math.max(0, Math.min(gesture, names.length - 1))];
+    }
+
+    private static void showNavShortcutDialog(Context context, TextView label, int titleRes) {
+        boolean search = titleRes == R.string.nav_shortcut_search;
+        String[] all = navGestureNames(context);
+        String[] options = search ? new String[]{all[1], all[2]} : all;
+        int current = search ? secretMenuGestureIndex()
+                : titleRes == R.string.nav_shortcut_direct ? FeatureFlags.ghostToggleGesture
+                : FeatureFlags.cleanUiToggleGesture;
         IeDialog dialog = new IeDialog(context)
-                .title(I18n.t(context, R.string.clean_ui_gesture_mode))
+                .title(I18n.t(context, titleRes))
                 .choices(options, current, which -> {
-                    FeatureFlags.cleanUiToggleGesture = which;
+                    int gesture;
+                    if (search) {
+                        FeatureFlags.secretMenuDoubleTap = which == 1;
+                        gesture = which + 1;
+                    } else if (titleRes == R.string.nav_shortcut_direct) {
+                        FeatureFlags.ghostToggleGesture = gesture = which;
+                    } else {
+                        FeatureFlags.cleanUiToggleGesture = gesture = which;
+                    }
                     SettingsManager.saveAllFlags();
+                    if (label != null) label.setText(navShortcutLabel(context, titleRes, gesture));
                 });
         dialog.secondary(I18n.t(context, android.R.string.cancel), null);
         dialog.show();
@@ -1856,19 +1887,6 @@ public class DialogUtils {
                 createActionRow(context, R.drawable.ic_settings_gear, I18n.t(context, R.string.ig_dialog_app_disguise), "#0A84FF", v -> { showAppDisguiseDialog(context, (android.widget.TextView) findFirstText(v)); })
         ));
         showSectionDialog(context, I18n.t(context, R.string.menu_app), layout, () -> {});
-    }
-
-    private static void showSecretMenuModeDialog(Context context) {
-        String[] options = {I18n.t(context, R.string.ig_dialog_secret_menu_long_press), I18n.t(context, R.string.ig_dialog_secret_menu_double_tap_long_press)};
-        int selected = FeatureFlags.secretMenuDoubleTap ? 1 : 0;
-        IeDialog dialog = new IeDialog(context)
-                .title(I18n.t(context, R.string.ig_dialog_secret_menu_trigger))
-                .choices(options, selected, which -> {
-                    FeatureFlags.secretMenuDoubleTap = (which == 1);
-                    SettingsManager.saveAllFlags();
-                });
-        dialog.secondary(context.getString(android.R.string.cancel), null);
-        dialog.show();
     }
 
     private static void showAppDisguiseDialog(Context context, android.widget.TextView label) {

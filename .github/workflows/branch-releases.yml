@@ -1,93 +1,167 @@
 name: Branch Releases
 
+# One release per branch, always pointing at the branch's latest commit, with the APK attached.
+# - push on any branch: rebuild and replace that branch's release
+# - manual run (Actions > Branch Releases > Run workflow): same, for the chosen branch
+# - branch deleted: its release and tag are removed
+# Every run also removes releases whose branch no longer exists.
+#
+# Signing: if the repository secrets SIGNING_KEYSTORE_BASE64, SIGNING_KEYSTORE_PASSWORD,
+# SIGNING_KEY_ALIAS and SIGNING_KEY_PASSWORD are set, the release build is signed with that key
+# (same signature on every build, so updates install over each other). Without them the debug
+# build is published: it installs, but each run is signed with a new debug key, so updating
+# needs an uninstall first.
+
 on:
-  workflow_dispatch:
   push:
     branches:
       - '**'
     tags-ignore:
       - '**'
   delete:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build (empty = the branch selected above)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
+
+concurrency:
+  group: branch-release-${{ github.event_name == 'delete' && github.event.ref || inputs.branch || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   cleanup-deleted-branch:
     if: github.event_name == 'delete' && github.event.ref_type == 'branch'
     runs-on: ubuntu-latest
     steps:
-      - name: Delete release and tag for deleted branch
+      - name: Delete release and tag of the deleted branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: release-${{ github.event.ref }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.ref }}
         run: |
-          echo "Verifica esistenza release per il tag: $TAG_NAME"
-          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
-            echo "Eliminazione release: $TAG_NAME"
-            gh release delete "$TAG_NAME" --cleanup-tag --yes
+          TAG="release-${BRANCH//\//-}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release delete "$TAG" --cleanup-tag --yes
+            echo "Deleted release $TAG"
           else
-            echo "Nessuna release trovata per $TAG_NAME"
+            echo "No release for $BRANCH"
           fi
 
   build-and-release:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    env:
+      BRANCH: ${{ inputs.branch || github.ref_name }}
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Resolve names
+        id: meta
+        run: |
+          SHA=$(git rev-parse HEAD)
+          SHORT=$(git rev-parse --short HEAD)
+          SAFE="${BRANCH//\//-}"
+          {
+            echo "sha=$SHA"
+            echo "short=$SHORT"
+            echo "tag=release-$SAFE"
+            echo "apk=InstaEclipse-$SAFE-$SHORT.apk"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build APK (Release/Assemble)
-        run: ./gradlew assemble
-
-      - name: Find and stage APK asset
-        id: find_apk
+      - name: Build APK
+        id: build
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          APK_NAME: ${{ steps.meta.outputs.apk }}
         run: |
-          APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
-          if [ -n "$APK_PATH" ]; then
-            echo "Trovato APK: $APK_PATH"
-            echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          chmod +x gradlew
+          mkdir -p dist
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ]; then
+            ./gradlew --no-daemon assembleRelease
+            UNSIGNED=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+            BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" sign \
+              --ks "$RUNNER_TEMP/release.jks" \
+              --ks-pass env:KEYSTORE_PASSWORD \
+              --ks-key-alias "$KEY_ALIAS" \
+              --key-pass env:KEY_PASSWORD \
+              --out "dist/$APK_NAME" "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" verify "dist/$APK_NAME"
+            rm -f "$RUNNER_TEMP/release.jks"
+            echo "variant=release (signed)" >> "$GITHUB_OUTPUT"
           else
-            echo "Nessun APK generato."
-            echo "apk_path=" >> "$GITHUB_OUTPUT"
+            ./gradlew --no-daemon assembleDebug
+            cp "$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)" "dist/$APK_NAME"
+            echo "variant=debug" >> "$GITHUB_OUTPUT"
           fi
+          ls -l dist
 
-      - name: Create or update branch release
+      # Only reached when the build succeeded, so a broken commit never removes a working release.
+      - name: Replace the branch release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH_NAME: ${{ github.ref_name }}
-          TAG_NAME: release-${{ github.ref_name }}
-          SHA: ${{ github.sha }}
-          APK_PATH: ${{ steps.find_apk.outputs.apk_path }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          SHA: ${{ steps.meta.outputs.sha }}
+          SHORT: ${{ steps.meta.outputs.short }}
+          APK_NAME: ${{ steps.meta.outputs.apk }}
+          VARIANT: ${{ steps.build.outputs.variant }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          # 1. Rimuove la release esistente e il relativo tag
-          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
-            echo "Aggiornamento release esistente: $TAG_NAME"
-            gh release delete "$TAG_NAME" --cleanup-tag --yes
+          set -euo pipefail
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release delete "$TAG" --cleanup-tag --yes
           fi
+          # A deleted tag can linger for a moment; make sure it is gone before re-creating it.
+          git push origin ":refs/tags/$TAG" 2>/dev/null || true
 
-          # 2. Prepara gli argomenti degli asset
-          ASSET_ARGS=()
-          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            ASSET_ARGS+=("$APK_PATH")
-          fi
+          LATEST=false
+          [ "$BRANCH" = "$DEFAULT_BRANCH" ] && LATEST=true
 
-          # 3. Ricrea la release associata al branch e al commit corrente
-          gh release create "$TAG_NAME" \
-            "${ASSET_ARGS[@]}" \
+          COMMIT_MSG=$(git log -1 --pretty=%s "$SHA")
+          gh release create "$TAG" "dist/$APK_NAME" \
             --target "$SHA" \
-            --title "Build: $BRANCH_NAME" \
-            --notes "Ultimo aggiornamento per il branch \`$BRANCH_NAME\` al commit \`$SHA\`." \
-            --latest
+            --title "$BRANCH ($SHORT)" \
+            --latest="$LATEST" \
+            --notes "Build of branch \`$BRANCH\` at commit $SHA ($VARIANT).
+
+          Last commit: $COMMIT_MSG"
+
+      - name: Remove releases of branches that no longer exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GH_REPO/branches" --jq '.[].name' \
+            | sed 's#/#-#g; s#^#release-#' | sort -u > "$RUNNER_TEMP/wanted.txt"
+          gh release list --limit 1000 --json tagName --jq '.[].tagName' \
+            | grep '^release-' | sort -u > "$RUNNER_TEMP/existing.txt" || true
+          comm -23 "$RUNNER_TEMP/existing.txt" "$RUNNER_TEMP/wanted.txt" | while read -r OLD; do
+            [ -n "$OLD" ] || continue
+            echo "Deleting stale release $OLD"
+            gh release delete "$OLD" --cleanup-tag --yes || true
+          done

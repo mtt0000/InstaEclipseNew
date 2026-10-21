@@ -64,7 +64,6 @@ public final class FancyBioFontHook {
         card.setOnClickListener(open);
         if (text != null) text.setOnClickListener(open);
         card.setTag(R.id.ie_fancy_font, Boolean.TRUE);
-        ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(card);
     }
 
     /** The bio's text field (the form field around it reports itself as an EditText too). */

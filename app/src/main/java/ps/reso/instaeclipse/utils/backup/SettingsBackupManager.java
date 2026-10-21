@@ -33,6 +33,8 @@ public class SettingsBackupManager {
 
         // Quick Toggles
         s.put("cleanUiToggleGesture",    FeatureFlags.cleanUiToggleGesture);
+        s.put("ghostToggleGesture",      FeatureFlags.ghostToggleGesture);
+        s.put("secretMenuDoubleTap",     FeatureFlags.secretMenuDoubleTap);
         s.put("isCleanUiActive",         FeatureFlags.isCleanUiActive);
         s.put("cleanUiSavedSnapshot",    FeatureFlags.cleanUiSavedSnapshot);
         s.put("quickToggleSeen",         FeatureFlags.quickToggleSeen);
@@ -203,6 +205,8 @@ public class SettingsBackupManager {
         if (s.has("keepUnsentMessages"))       FeatureFlags.keepUnsentMessages       = s.getBoolean("keepUnsentMessages");
 
         if (s.has("cleanUiToggleGesture"))   FeatureFlags.cleanUiToggleGesture   = s.getInt("cleanUiToggleGesture");
+        if (s.has("ghostToggleGesture"))     FeatureFlags.ghostToggleGesture     = s.getInt("ghostToggleGesture");
+        if (s.has("secretMenuDoubleTap"))    FeatureFlags.secretMenuDoubleTap    = s.getBoolean("secretMenuDoubleTap");
         if (s.has("isCleanUiActive"))        FeatureFlags.isCleanUiActive        = s.getBoolean("isCleanUiActive");
         if (s.has("cleanUiSavedSnapshot"))   FeatureFlags.cleanUiSavedSnapshot   = s.getString("cleanUiSavedSnapshot");
         if (s.has("quickToggleSeen"))        FeatureFlags.quickToggleSeen        = s.getBoolean("quickToggleSeen");

@@ -44,6 +44,11 @@ final class ThreadHeaderMenu {
     static boolean add(Activity a, String key, CharSequence label, Runnable action) {
         try {
             View btn = a.getWindow().getDecorView().findViewWithTag(TAG);
+            // Clean UI: no header button (true, so callers stop retrying for this chat).
+            if (ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.isActive()) {
+                if (btn != null && btn.getParent() instanceof ViewGroup g) g.removeView(btn);
+                return true;
+            }
             if (btn == null) btn = createButton(a);
             if (btn == null) return false;
             Map<String, Entry> m = entries.get(btn);

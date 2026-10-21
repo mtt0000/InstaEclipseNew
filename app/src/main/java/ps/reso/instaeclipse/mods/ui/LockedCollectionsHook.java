@@ -177,11 +177,13 @@ public class LockedCollectionsHook {
                         if (stale != null && stale.getParent() instanceof ViewGroup p) p.post(() -> p.removeView(stale));
                         return;
                     }
-                    if (!FeatureFlags.lockSavedCollections || activeId == null) return;
+                    if (!FeatureFlags.lockSavedCollections || FeatureFlags.isCleanUiActive || activeId == null) return;
                     if (g.findViewWithTag(BTN_TAG) == null) g.post(() -> addButton(a, activeId));
                 });
             View old = g.findViewWithTag(BTN_TAG);
             if (old != null && old.getParent() instanceof ViewGroup p) p.removeView(old);
+            // Clean UI: no 🔒 button; locked collections still ask for the passcode.
+            if (FeatureFlags.isCleanUiActive) return;
             // the Options button's parent: the deepest group holding the bar's right-most clickable
             ViewGroup host = g;
             View options = null;
