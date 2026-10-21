@@ -211,6 +211,7 @@ public final class ConversationMenuHook {
             if (UNSENT.equals(tag)) showDeleted(a); else show(a);
         });
         target.addView(button, new LinearLayout.LayoutParams(size, size));
+        ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(button);
     }
 
     public static void show(Activity a) {

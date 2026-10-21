@@ -106,6 +106,7 @@ final class ThreadHeaderMenu {
         btn.setOnClickListener(v -> show(v));
         try { target.addView(btn, Math.min(insertAt, target.getChildCount())); }
         catch (Throwable t) { target.addView(btn); }
+        ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(btn);
         ModuleLog.line("(IE|ThreadMenu) ✅ button injected in " + target.getClass().getSimpleName());
         return btn;
     }

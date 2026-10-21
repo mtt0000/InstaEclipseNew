@@ -177,6 +177,7 @@ public class FollowListExportHook {
         lp.bottomMargin = (int) (24 * d);
         lp.rightMargin = (int) (16 * d);
         g.addView(pill, lp);
+        ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(pill);
         pill.bringToFront();
     }
 
@@ -506,6 +507,7 @@ public class FollowListExportHook {
         lp.bottomMargin = (int) ((FeatureFlags.followListExport ? 72 : 24) * d);
         lp.rightMargin = (int) (16 * d);
         g.addView(pill, lp);
+        ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(pill);
         pill.bringToFront();
     }
 
