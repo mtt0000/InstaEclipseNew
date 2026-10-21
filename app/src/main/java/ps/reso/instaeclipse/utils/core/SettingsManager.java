@@ -58,6 +58,10 @@ public class SettingsManager {
         editor.putBoolean("quickToggleHideChats", FeatureFlags.quickToggleHideChats);
         editor.putBoolean("quickToggleHideFolderBar", FeatureFlags.quickToggleHideFolderBar);
         editor.putBoolean("quickToggleEmptyGeneral", FeatureFlags.quickToggleEmptyGeneral);
+        editor.putBoolean("hideChatBackLongPress", FeatureFlags.hideChatBackLongPress);
+        editor.putInt("hideChatsBackLongPressSeconds", FeatureFlags.hideChatsBackLongPressSeconds);
+        editor.putBoolean("emptyGeneralFolder", FeatureFlags.emptyGeneralFolder);
+        editor.putBoolean("hideDirectFoldersBar", FeatureFlags.hideDirectFoldersBar);
         editor.putString("appDisguise", FeatureFlags.appDisguise);
         editor.putBoolean("showHideChatButton", FeatureFlags.showHideChatButton);
         editor.putBoolean("showDeletedMessagesButton", FeatureFlags.showDeletedMessagesButton);
@@ -221,6 +225,11 @@ public class SettingsManager {
 
         for (String flag : ExtrasFeatures.flags()) editor.putBoolean(flag, ExtrasFeatures.get(flag));
 
+        // Safety net: every boolean / int / String setting is written, even one a new feature forgot
+        // to list above. An unlisted key was only ever changed in memory, and the next loadAllFlags
+        // (every resume, via CompanionSync) put the stored value back, switching the feature off.
+        putEveryFlag(editor);
+
         editor.apply();
         stampChangedKeys(before);
         // Instagram -> companion: so the companion app shows what was just changed here.
@@ -233,6 +242,25 @@ public class SettingsManager {
             if (appliedHideState != null && appliedHideState != FeatureFlags.hideSpecificChats)
                 ps.reso.instaeclipse.mods.ghost.HideChatsHook.refreshKnownAccounts();
             appliedHideState = FeatureFlags.hideSpecificChats;
+        }
+    }
+
+    /** Writes each static, non-final boolean / int / String field of FeatureFlags under its own name
+     *  (the same key loadAllFlags reads and the companion's ModuleReplies schema accepts). */
+    private static void putEveryFlag(SharedPreferences.Editor editor) {
+        for (java.lang.reflect.Field f : SafeReflect.fields(FeatureFlags.class)) {
+            int mod = f.getModifiers();
+            if (!java.lang.reflect.Modifier.isStatic(mod) || java.lang.reflect.Modifier.isFinal(mod)) continue;
+            try {
+                Class<?> type = f.getType();
+                if (type == boolean.class) editor.putBoolean(f.getName(), f.getBoolean(null));
+                else if (type == int.class) editor.putInt(f.getName(), f.getInt(null));
+                else if (type == String.class) {
+                    Object v = f.get(null);
+                    editor.putString(f.getName(), v != null ? (String) v : "");
+                }
+            } catch (Throwable ignored) {
+            }
         }
     }
 
