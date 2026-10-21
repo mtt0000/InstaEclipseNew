@@ -73,6 +73,7 @@ public class SettingsManager {
 
         // Quick Toggles
         editor.putInt("cleanUiToggleGesture", FeatureFlags.cleanUiToggleGesture);
+        editor.putInt("ghostToggleGesture", FeatureFlags.ghostToggleGesture);
         editor.putBoolean("isCleanUiActive", FeatureFlags.isCleanUiActive);
         editor.putString("cleanUiSavedSnapshot", FeatureFlags.cleanUiSavedSnapshot);
         editor.putBoolean("quickToggleSeen", FeatureFlags.quickToggleSeen);
@@ -301,6 +302,7 @@ public class SettingsManager {
 
         // Quick Toggles
         FeatureFlags.cleanUiToggleGesture = prefs.getInt("cleanUiToggleGesture", 0);
+        FeatureFlags.ghostToggleGesture = prefs.getInt("ghostToggleGesture", 1);
         FeatureFlags.isCleanUiActive = prefs.getBoolean("isCleanUiActive", false);
         FeatureFlags.cleanUiSavedSnapshot = prefs.getString("cleanUiSavedSnapshot", "");
         FeatureFlags.quickToggleSeen = prefs.getBoolean("quickToggleSeen", false);

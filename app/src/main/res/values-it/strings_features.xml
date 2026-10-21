@@ -33,4 +33,10 @@
     <string name="app_name_file_manager">File Manager</string>
     <string name="app_name_calendar">Calendario</string>
     <string name="app_name_weather">Meteo</string>
+
+    <!-- Navigation > Nav bar shortcuts -->
+    <string name="menu_nav_shortcuts">Scorciatoie barra di navigazione</string>
+    <string name="nav_shortcut_search">Cerca: apri il menù InstaEclipse</string>
+    <string name="nav_shortcut_direct">Messaggi: attiva/disattiva Ghost Mode</string>
+    <string name="nav_shortcut_home">Home: attiva/disattiva Clean UI</string>
 </resources>

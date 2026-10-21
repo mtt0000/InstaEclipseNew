@@ -79,5 +79,7 @@ public class ModulePreferencePolicyTest {
         assertTrue(ModuleReplies.isPreferenceValue("quickToggleHideFolderBar", true));
         assertTrue(ModuleReplies.isPreferenceValue("quickToggleEmptyGeneral", true));
         assertTrue(ModuleReplies.isPreferenceValue("appDisguise", "calculator"));
+        assertTrue(ModuleReplies.isPreferenceUpdate(INTEGER, "cleanUiToggleGesture", 2));
+        assertTrue(ModuleReplies.isPreferenceUpdate(INTEGER, "ghostToggleGesture", 2));
     }
 }

@@ -1330,27 +1330,56 @@ public class FeaturesFragment extends Fragment {
         defs.add(getString(R.string.menu_nav_gestures));
         defs.add(Arrays.asList(
                 createExtrasSwitch("#30D158", "disableSwipeToCamera"),
-                createSwitch(R.drawable.ic_home, "#30D158", getString(R.string.ig_back_leaves_home), "backLeavesHome"),
-                createClickable(R.drawable.ic_tune, "#30D158", getString(R.string.clean_ui_toggle_title), this::showCleanUiGestureDialog)
+                createSwitch(R.drawable.ic_home, "#30D158", getString(R.string.ig_back_leaves_home), "backLeavesHome")
+        ));
+
+        // Long press / 2 taps + long press on the bottom-nav buttons (NavGestureBinder).
+        defs.add(getString(R.string.menu_nav_shortcuts));
+        defs.add(Arrays.asList(
+                createClickable(R.drawable.ic_search, "#30D158",
+                        navShortcutLabel(R.string.nav_shortcut_search, localCache.getBoolean("secretMenuDoubleTap", false) ? 2 : 1),
+                        () -> showNavShortcutDialog(R.string.nav_shortcut_search)),
+                createClickable(R.drawable.ic_chat, "#30D158",
+                        navShortcutLabel(R.string.nav_shortcut_direct, localCache.getInt("ghostToggleGesture", 1)),
+                        () -> showNavShortcutDialog(R.string.nav_shortcut_direct)),
+                createClickable(R.drawable.ic_home, "#30D158",
+                        navShortcutLabel(R.string.nav_shortcut_home, localCache.getInt("cleanUiToggleGesture", 0)),
+                        () -> showNavShortcutDialog(R.string.nav_shortcut_home))
         ));
 
         return defs;
     }
 
-    private void showCleanUiGestureDialog() {
-        Context context = getContext();
-        if (context == null) return;
-        String[] options = new String[]{
+    /** Off / Long press / 2 taps + long press, indexed like FeatureFlags' gesture ints. */
+    private String[] navGestureNames() {
+        return new String[]{
                 getString(R.string.clean_ui_gesture_off),
                 getString(R.string.clean_ui_gesture_long_press),
-                getString(R.string.clean_ui_gesture_double_tap_long)
-        };
-        int current = localCache.getInt("cleanUiToggleGesture", 0);
+                getString(R.string.clean_ui_gesture_double_tap_long)};
+    }
+
+    private String navShortcutLabel(int titleRes, int gesture) {
+        String[] names = navGestureNames();
+        return getString(titleRes) + "  ·  " + names[Math.max(0, Math.min(gesture, names.length - 1))];
+    }
+
+    /** The secret menu has no "Off" (it is the only way in), so Search offers the two gestures only. */
+    private void showNavShortcutDialog(int titleRes) {
+        Context context = getContext();
+        if (context == null) return;
+        boolean search = titleRes == R.string.nav_shortcut_search;
+        String key = titleRes == R.string.nav_shortcut_direct ? "ghostToggleGesture" : "cleanUiToggleGesture";
+        String[] all = navGestureNames();
+        String[] options = search ? new String[]{all[1], all[2]} : all;
+        int current = search ? (localCache.getBoolean("secretMenuDoubleTap", false) ? 1 : 0)
+                : localCache.getInt(key, "ghostToggleGesture".equals(key) ? 1 : 0);
         new MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.clean_ui_gesture_mode)
+                .setTitle(titleRes)
                 .setSingleChoiceItems(options, current, (dialog, which) -> {
-                    putIntPref("cleanUiToggleGesture", which);
+                    if (search) putBoolPref("secretMenuDoubleTap", which == 1);
+                    else putIntPref(key, which);
                     dialog.dismiss();
+                    loadNavigationMenu();
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
@@ -1426,23 +1455,6 @@ public class FeaturesFragment extends Fragment {
     }
 
     /** Custom share domain (saved as the "customShareDomain" string pref). */
-        private void showSecretMenuModeDialog(android.view.View trigger) {
-        String[] options = {getString(R.string.ig_dialog_secret_menu_long_press), getString(R.string.ig_dialog_secret_menu_double_tap_long_press)};
-        int selected = localCache.getBoolean("secretMenuDoubleTap", false) ? 1 : 0;
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.ig_dialog_secret_menu_trigger)
-                .setSingleChoiceItems(options, selected, (d, which) -> {
-                    boolean val = (which == 1);
-                    localCache.edit().putBoolean("secretMenuDoubleTap", val).apply();
-                    ps.reso.instaeclipse.utils.feature.FeatureFlags.secretMenuDoubleTap = val;
-                    if (trigger instanceof android.widget.TextView) {
-                        ((android.widget.TextView) trigger).setText(getString(R.string.ig_dialog_secret_menu_trigger) + "  ·  " + options[which]);
-                    }
-                    d.dismiss();
-                    try { java.lang.reflect.Method m = getClass().getDeclaredMethod("syncToModule"); m.setAccessible(true); m.invoke(this); } catch (Exception ignored) {}
-                }).show();
-    }
-
     private void showAppDisguiseDialog(android.view.View trigger) {
         String[] options = {"Default", "Calculator", "Notes", "File Manager", "Calendar", "Weather"};
         String[] keys = {
@@ -1831,7 +1843,6 @@ public class FeaturesFragment extends Fragment {
                 createSwitch(R.drawable.ic_notification, "#0A84FF", getString(R.string.ig_dialog_misc_show_feature_toasts), "showFeatureToasts"),
                 createSwitch(R.drawable.ic_link, "#0A84FF", getString(R.string.ig_dialog_open_links_externally), "openLinksExternally"),
                 createClickable(R.drawable.ic_link, "#0A84FF", shareDomainLabel(), this::showShareDomainDialog),
-                createClickable(R.drawable.ic_settings_gear, "#0A84FF", getString(R.string.ig_dialog_secret_menu_trigger) + "  ·  " + (localCache.getBoolean("secretMenuDoubleTap", false) ? getString(R.string.ig_dialog_secret_menu_double_tap_long_press) : getString(R.string.ig_dialog_secret_menu_long_press)), () -> { showSecretMenuModeDialog(null); }),
                 createClickable(R.drawable.ic_settings_gear, "#0A84FF", getString(R.string.ig_dialog_app_disguise), () -> { showAppDisguiseDialog(null); })
         ));
         // Auto-clear cache (mirrors the in-IG dialog's Tools section).

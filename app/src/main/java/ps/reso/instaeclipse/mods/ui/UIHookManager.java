@@ -25,12 +25,9 @@ import ps.reso.instaeclipse.R;
 import ps.reso.instaeclipse.Xposed.Module;
 import ps.reso.instaeclipse.mods.devops.config.ConfigManager;
 import ps.reso.instaeclipse.mods.ui.utils.BottomSheetHookUtil;
-import android.view.MotionEvent;
-import android.view.ViewConfiguration;
-
-import ps.reso.instaeclipse.mods.ui.utils.BottomSheetHookUtil;
 import ps.reso.instaeclipse.mods.ui.utils.CleanUiManager;
 import ps.reso.instaeclipse.mods.ui.utils.LifecycleHookUtil;
+import ps.reso.instaeclipse.mods.ui.utils.NavGestureBinder;
 import ps.reso.instaeclipse.mods.ui.utils.VibrationUtil;
 import ps.reso.instaeclipse.utils.core.SettingsManager;
 import ps.reso.instaeclipse.utils.dialog.DialogUtils;
@@ -109,92 +106,28 @@ public class UIHookManager {
             sFeedTabId = res.getIdentifier("feed_tab", "id", pkg);
     }
 
-    // Tracks views we've already attached the Clean UI listener to
-    private static final java.util.WeakHashMap<View, Boolean> sCleanUiListenerAttached = new java.util.WeakHashMap<>();
-
-    private static void setupCleanUiGesture(Activity activity, View v) {
-        if (v == null || sCleanUiListenerAttached.containsKey(v)) return;
-        sCleanUiListenerAttached.put(v, true);
-
-        v.setOnTouchListener(new View.OnTouchListener() {
-            private int tapCount = 0;
-            private boolean longPressTriggered = false;
-            private float startX, startY;
-            private final Handler handler = new Handler(Looper.getMainLooper());
-
-            private final Runnable longPressRunnable = () -> {
-                longPressTriggered = true;
-                v.setPressed(false);
-                tapCount = 0;
-                VibrationUtil.vibrate(activity);
-                CleanUiManager.toggleCleanUi(activity);
-            };
-
-            private final Runnable resetTapCountRunnable = () -> {
-                tapCount = 0;
-            };
-
-            @Override
-            public boolean onTouch(View view, MotionEvent event) {
-                int mode = FeatureFlags.cleanUiToggleGesture;
-                if (mode == 0) return false;
-
-                int slop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
-
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        startX = event.getX();
-                        startY = event.getY();
-                        longPressTriggered = false;
-
-                        if (mode == 1) {
-                            handler.postDelayed(longPressRunnable, 500);
-                        } else if (mode == 2) {
-                            if (tapCount == 2) {
-                                handler.postDelayed(longPressRunnable, 450);
-                            }
-                        }
-                        break;
-                    case MotionEvent.ACTION_MOVE:
-                        if (Math.hypot(event.getX() - startX, event.getY() - startY) > slop) {
-                            handler.removeCallbacks(longPressRunnable);
-                        }
-                        break;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        handler.removeCallbacks(longPressRunnable);
-
-                        if (longPressTriggered) {
-                            return true; // Consume event so normal scroll/refresh doesn't happen
-                        }
-
-                        if (event.getAction() == MotionEvent.ACTION_UP && mode == 2) {
-                            tapCount++;
-                            handler.removeCallbacks(resetTapCountRunnable);
-                            handler.postDelayed(resetTapCountRunnable, 350);
-                        }
-                        break;
-                }
-                return false;
-            }
-        });
+    /** Secret menu on Search: long press, or two taps + long press ("secretMenuDoubleTap"). */
+    private static int secretMenuGesture() {
+        return FeatureFlags.secretMenuDoubleTap
+                ? NavGestureBinder.DOUBLE_TAP_LONG_PRESS : NavGestureBinder.LONG_PRESS;
     }
 
-    private static void processCleanUiHomeTab(Activity activity) {
-        if (FeatureFlags.cleanUiToggleGesture == 0) return;
-
-        View homeTab = null;
-        if (sFeedTabId != 0) {
-            homeTab = activity.findViewById(sFeedTabId);
-        }
+    /** Clean UI on Home, Ghost Mode quick toggle on Messages / the inbox button. */
+    private static void bindNavShortcuts(Activity activity) {
+        View homeTab = sFeedTabId != 0 ? activity.findViewById(sFeedTabId) : null;
         if (homeTab == null && sTabBarId != 0) {
             View tabBar = activity.findViewById(sTabBarId);
             if (tabBar instanceof ViewGroup && ((ViewGroup) tabBar).getChildCount() > 0) {
                 homeTab = ((ViewGroup) tabBar).getChildAt(0);
             }
         }
-        if (homeTab != null) {
-            setupCleanUiGesture(activity, homeTab);
+        NavGestureBinder.bind(activity, homeTab, () -> FeatureFlags.cleanUiToggleGesture,
+                CleanUiManager::toggleCleanUi);
+
+        for (int id : new int[]{sDirectTabId, sInboxButtonId}) {
+            View v = id != 0 ? activity.findViewById(id) : null;
+            NavGestureBinder.bind(activity, v, () -> FeatureFlags.ghostToggleGesture,
+                    GhostModeUtils::toggleSelectedGhostOptions);
         }
     }
 
@@ -231,7 +164,7 @@ public class UIHookManager {
         // Cache resource IDs once per IG install (string table lookup is non-trivial).
         ensureIdsCached(activity);
 
-        processCleanUiHomeTab(activity);
+        bindNavShortcuts(activity);
 
         // Always re-apply the search long-press listener. Instagram may overwrite it after
         // a config change (e.g. when InstaEclipse settings are toggled), so we cannot skip
@@ -271,7 +204,7 @@ public class UIHookManager {
                         sGlobalListenerPending.remove(activity);
                         sSearchWiringDone.put(activity, true);
                     }
-                    processCleanUiHomeTab(activity);
+                    bindNavShortcuts(activity);
                 }
             });
         }
@@ -316,24 +249,33 @@ public class UIHookManager {
         // Hook getBottomSheetNavigator - Instagram Main
         BottomSheetHookUtil.hookBottomSheetNavigator(Module.dexKitBridge);
 
-        // Hook View.performLongClick — inbox long-press override.
+        // Hook View.performLongClick — nav bar shortcuts (Search / Home / Messages / inbox).
         // setOnLongClickListener is unreliable when Instagram has a parent-level touch
         // interceptor or a custom view that overrides long-press dispatch. Hooking
         // performLongClick() fires BEFORE any listener/interceptor chain and lets us
-        // fully own the event by returning true via setResult.
+        // fully own the event by returning true via setResult. NavGestureBinder's own
+        // timer covers views whose long press never reaches performLongClick.
         // This only fires when the user actually long-presses something — not a hot path.
         XposedHelpers.findAndHookMethod(View.class, "performLongClick", new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) { ps.reso.instaeclipse.utils.core.JitGuard.tick(param.method);
-                if (sInboxButtonId == 0 && sDirectTabId == 0) return;
                 View view = (View) param.thisObject;
+                if (NavGestureBinder.onPerformLongClick(view)) {
+                    param.setResult(true); // consume — skip Instagram's handler entirely
+                    return;
+                }
+                // Inbox / Messages button not bound yet (re-inflated since the last resume):
+                // plain long press still toggles Ghost Mode, as before.
+                if (NavGestureBinder.isBound(view)) return;
+                if (FeatureFlags.ghostToggleGesture != NavGestureBinder.LONG_PRESS) return;
+                if (sInboxButtonId == 0 && sDirectTabId == 0) return;
                 int id = view.getId();
                 if (id != sInboxButtonId && id != sDirectTabId) return;
                 Activity activity = currentActivity;
                 if (activity == null) return;
                 GhostModeUtils.toggleSelectedGhostOptions(activity);
                 VibrationUtil.vibrate(activity);
-                param.setResult(true); // consume — skip Instagram's handler entirely
+                param.setResult(true);
             }
         });
 
@@ -390,56 +332,12 @@ public class UIHookManager {
     }
 
     private static void applySearchHook(Activity activity, View v) {
-        if (!FeatureFlags.secretMenuDoubleTap) {
-            v.setOnLongClickListener(view -> {
-                DialogUtils.showEclipseOptionsDialog(activity);
-                VibrationUtil.vibrate(activity);
-                return true;
-            });
-            v.setOnTouchListener(null);
-            return;
-        }
-
-        v.setOnLongClickListener(null); // remove standard listener to avoid conflicts
-        v.setOnTouchListener(new View.OnTouchListener() {
-            private int tapCount = 0;
-            private long lastTapTime = 0;
-            private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-            private final Runnable resetTaps = () -> tapCount = 0;
-            private final Runnable longPressAction = () -> {
-                if (tapCount == 2) {
-                    DialogUtils.showEclipseOptionsDialog(activity);
-                    ps.reso.instaeclipse.mods.ui.utils.VibrationUtil.vibrate(activity);
-                    tapCount = 0;
-                }
-            };
-
-            @Override
-            public boolean onTouch(View view, android.view.MotionEvent event) {
-                switch (event.getAction()) {
-                    case android.view.MotionEvent.ACTION_DOWN:
-                        long time = System.currentTimeMillis();
-                        if (time - lastTapTime > 350) {
-                            tapCount = 0;
-                        }
-                        tapCount++;
-                        lastTapTime = time;
-                        handler.removeCallbacks(resetTaps);
-                        handler.removeCallbacks(longPressAction);
-
-                        if (tapCount == 3) {
-                            handler.postDelayed(longPressAction, 450);
-                        }
-                        break;
-                    case android.view.MotionEvent.ACTION_UP:
-                    case android.view.MotionEvent.ACTION_CANCEL:
-                        handler.removeCallbacks(longPressAction);
-                        handler.postDelayed(resetTaps, 350);
-                        break;
-                }
-                return false; // Let normal clicks through
-            }
-        });
+        // Same hook-up as upstream (a long-click listener, which also makes the tab
+        // long-clickable), with the press itself classified by NavGestureBinder so both
+        // "long press" and "two taps + long press" work.
+        NavGestureBinder.bind(activity, v, UIHookManager::secretMenuGesture,
+                DialogUtils::showEclipseOptionsDialog);
+        v.setOnLongClickListener(view -> NavGestureBinder.onPerformLongClick(view));
     }
 
     private static void processSearchView(Activity activity, View view, String id) {
