@@ -23,7 +23,7 @@
     <string name="ig_dialog_secret_menu_trigger">Apertura Menù Segreto</string>
     <string name="ig_dialog_secret_menu_long_press">Pressione prolungata</string>
     <string name="ig_dialog_secret_menu_double_tap_long_press">2 tocchi + pressione prolungata</string>
-    <string name="ig_dialog_batch_hide_chats">Nascondi chat in blocco dal menù selezione</string>
+    <string name="ig_dialog_batch_hide_chats">Pulsante nascondi chat in blocco nell\'inbox</string>
     <string name="ig_dialog_quick_hide_chats">Includi Nascondi Specifiche Chat</string>
     <string name="ig_dialog_quick_hide_folder_bar">Includi Nascondi Barra Cartelle</string>
     <string name="ig_dialog_quick_empty_general">Includi Svuota Cartella Generali</string>
@@ -39,4 +39,11 @@
     <string name="nav_shortcut_search">Cerca: apri il menù InstaEclipse</string>
     <string name="nav_shortcut_direct">Messaggi: attiva/disattiva Ghost Mode</string>
     <string name="nav_shortcut_home">Home: attiva/disattiva Clean UI</string>
+
+    <!-- Hide Specific Chats > batch hide (inbox header button) -->
+    <string name="ig_batch_hide_title">Nascondi chat</string>
+    <string name="ig_batch_hide_hint">Spunta le chat da nascondere dall\'inbox. Sono elencate solo le chat già caricate dall\'inbox: scorri l\'inbox per caricarne altre.</string>
+    <string name="ig_batch_hide_action">Nascondi selezionate</string>
+    <string name="ig_batch_hide_empty">Nessuna chat da mostrare: apri l\'inbox, attendi che si carichi e riprova.</string>
+    <string name="ig_batch_hide_done">%1$d chat nascoste</string>
 </resources>

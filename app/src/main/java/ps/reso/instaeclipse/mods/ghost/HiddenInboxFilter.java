@@ -64,6 +64,8 @@ final class HiddenInboxFilter {
                         if (request != null) ModuleLog.line("(IE|HideChats) local inbox rebuild observed, request=" + request);
                         if (!observed) { observed = true; ModuleLog.line("(IE|HideChats) inbox builder executed"); }
                         if (!FeatureFlags.hideSpecificChats || !(param.getResult() instanceof List<?> list) || list.isEmpty()) return;
+                        // Batch hide lists the chats of this (still unfiltered) result.
+                        BatchHideChatsHook.recordInbox(param.thisObject, list);
                         try {
                             if (FeatureFlags.emptyGeneralFolder) {
                                 boolean isGeneral = false;
