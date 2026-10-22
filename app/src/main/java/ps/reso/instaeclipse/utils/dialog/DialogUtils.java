@@ -1927,7 +1927,7 @@ public class DialogUtils {
                     String val = keys[which];
                     // Saved here and pushed to the companion app, which switches its launcher entry.
                     ps.reso.instaeclipse.utils.core.AppDisguiseManager.applyDisguise(context, val);
-                    label.setText(I18n.t(context, R.string.ig_dialog_app_disguise) + "  ·  " + options[which]);
+                    if (label != null) label.setText(I18n.t(context, R.string.ig_dialog_app_disguise) + "  ·  " + options[which]);
                     android.widget.Toast.makeText(context, I18n.t(context, R.string.ig_app_disguise_changed), android.widget.Toast.LENGTH_LONG).show();
                     d.dismiss();
                 }).show();
