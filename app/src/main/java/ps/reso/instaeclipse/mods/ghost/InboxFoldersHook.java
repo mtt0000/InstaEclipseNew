@@ -413,6 +413,7 @@ public class InboxFoldersHook {
         if (cached != null && cached.getClass() == itemField.getType()) return cached;
 
         Constructor<?> ctor = headerConstructor(itemField.getType());
+        spyOnInstagramHeaders(ctor);
         Class<?>[] types = ctor.getParameterTypes();
         Object[] args = new Object[types.length];
         Context ctx = ps.reso.instaeclipse.xposedcompat.AndroidAppHelper.currentApplication();
@@ -431,9 +432,46 @@ public class InboxFoldersHook {
             diag("(IE|InboxFolders) header item " + ctor.getDeclaringClass().getName()
                     + java.util.Arrays.toString(types) + " args=" + java.util.Arrays.toString(args));
         }
-        Object header = ctor.newInstance(args);
+        Object header;
+        BUILDING.set(Boolean.TRUE);
+        try {
+            header = ctor.newInstance(args);
+        } finally {
+            BUILDING.set(Boolean.FALSE);
+        }
         builtHeader = header;
         return header;
+    }
+
+    private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static volatile boolean spyInstalled;
+    private static final java.util.Set<String> spied = java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>());
+
+    /** Records the arguments Instagram itself builds this header with (e.g. in the Requests folder or
+     *  on a personal account), so which argument drives which label can be read from the diagnostics. */
+    private static void spyOnInstagramHeaders(Constructor<?> ctor) {
+        if (spyInstalled) return;
+        spyInstalled = true;
+        try {
+            XposedBridge.hookMethod(ctor, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (BUILDING.get() || spied.size() >= 8) return;
+                    String args = java.util.Arrays.toString(param.args);
+                    if (!spied.add(args)) return;
+                    String caller = "";
+                    for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
+                        String c = e.getClassName();
+                        if (c.startsWith("X.") && !c.equals(ctor.getDeclaringClass().getName())) {
+                            caller = c + "." + e.getMethodName();
+                            break;
+                        }
+                    }
+                    diag("(IE|InboxFolders) IG header args=" + args + " from " + caller);
+                }
+            });
+        } catch (Throwable t) {
+            diag("(IE|InboxFolders) header spy failed: " + t);
+        }
     }
 
     /** A constructor taking two or more Strings and otherwise only enums / numbers / booleans. */
