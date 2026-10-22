@@ -217,8 +217,12 @@ public class GhostEphemeralKeepHook {
             for (MethodData md : methods) {
                 try {
                     Method m = md.getMethodInstance(classLoader);
+                    // Not a String-returning method: on IG 385811006 the name also sits in X.0005.A00(int),
+                    // Instagram's shared string table, called from everywhere (and no model to clean).
+                    Class<?> rt = m.getReturnType();
+                    if (rt == String.class || rt == CharSequence.class) continue;
                     owners.add(m.getDeclaringClass());
-                    if (m.getReturnType() != void.class && !m.getReturnType().isPrimitive()) targets.add(m);
+                    if (rt != void.class && !rt.isPrimitive()) targets.add(m);
                 } catch (Throwable ignored) {}
             }
             for (Class<?> c : owners) {

@@ -201,7 +201,8 @@ public class Module {
                         android.content.pm.PackageInfo pi =
                                 context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
                         long vc = pi.getLongVersionCode();
-                        DexKitCache.init(context, String.valueOf(vc));
+                        // With the module build: results found (or not) by an older build are not reused.
+                        DexKitCache.init(context, vc + "/" + ps.reso.instaeclipse.BuildConfig.BUILD_ID);
                     } catch (Throwable e) {
                         ModuleLog.line("(DexKitCache) ❌ init failed: " + e.getMessage());
                     }

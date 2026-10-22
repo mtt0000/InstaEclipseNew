@@ -13,6 +13,11 @@ android {
         targetSdk 36
         versionCode 20
         versionName '0.8.2'
+        // Part of the DexKit cache key: a new module build re-resolves its hooks instead of reusing
+        // what an older build found (or failed to find) on the same Instagram version.
+        def buildId = ''
+        try { buildId = 'git rev-parse --short HEAD'.execute(null, rootDir).text.trim() } catch (ignored) { }
+        buildConfigField "String", "BUILD_ID", "\"${buildId ?: versionCode}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
