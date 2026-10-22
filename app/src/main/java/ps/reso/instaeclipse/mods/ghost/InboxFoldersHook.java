@@ -348,6 +348,7 @@ public class InboxFoldersHook {
         String sec = sectionName(param.thisObject);
         if (sec == null) return;
         Object state = param.args != null && param.args.length > 0 ? param.args[0] : null;
+        trace(sec, param.getResult(), state);
         switch (sec) {
             case "INBOX_HEADER": {
                 headerSectionSeen = true;
@@ -445,6 +446,42 @@ public class InboxFoldersHook {
         }
         builtHeader = header;
         return header;
+    }
+
+    private static final java.util.Set<String> traced = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    /** What Instagram produced for the header / bar sections, and the inbox state it built them from
+     *  (distinct combinations only): tells the main inbox and the Requests folder apart. */
+    private static void trace(String sec, Object igResult, Object state) {
+        if (traced.size() >= 24) return;
+        String line = "sec=" + sec + " ig=" + describe(igResult, 1) + " state=" + describe(state, 1);
+        if (line.length() > 1500) line = line.substring(0, 1500) + "…";
+        if (traced.add(line)) diag("(IE|InboxFolders) TRACE " + line);
+    }
+
+    /** Class plus its enum / String / number / boolean fields (List sizes, nested IG objects one level). */
+    private static String describe(Object o, int depth) {
+        if (o == null) return "null";
+        if (o instanceof String || o instanceof Number || o instanceof Boolean || o instanceof Enum<?>) return String.valueOf(o);
+        if (o instanceof java.util.Collection<?> c) return "size" + c.size();
+        Class<?> k = o.getClass();
+        if (!k.getName().startsWith("X.") || depth < 0) return k.getName();
+        StringBuilder sb = new StringBuilder(k.getName()).append('{');
+        try {
+            for (Field f : k.getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                f.setAccessible(true);
+                Object v = f.get(o);
+                Class<?> t = f.getType();
+                if (t.isPrimitive() || v instanceof String || v instanceof Enum<?> || v instanceof Number
+                        || v instanceof Boolean || v instanceof java.util.Collection<?>) {
+                    sb.append(f.getName()).append('=').append(describe(v, 0)).append(' ');
+                } else if (v != null && v.getClass().getName().startsWith("X.") && depth > 0) {
+                    sb.append(f.getName()).append('=').append(describe(v, depth - 1)).append(' ');
+                }
+            }
+        } catch (Throwable ignored) {}
+        return sb.append('}').toString();
     }
 
     private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> Boolean.FALSE);
