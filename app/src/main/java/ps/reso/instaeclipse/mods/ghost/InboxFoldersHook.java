@@ -521,7 +521,7 @@ public class InboxFoldersHook {
     }
 
     private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> Boolean.FALSE);
-    private static volatile boolean spyInstalled;
+    private static volatile boolean spyInstalled, rewriteLogged;
     private static final java.util.Set<String> spied = java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>());
 
     /** Records the arguments Instagram itself builds this header with (e.g. in the Requests folder or
@@ -530,7 +530,26 @@ public class InboxFoldersHook {
         if (spyInstalled) return;
         spyInstalled = true;
         try {
+            int keyIndex = -1, strings = 0;
+            Class<?>[] types = ctor.getParameterTypes();
+            for (int i = 0; i < types.length; i++)
+                if (types[i] == String.class && ++strings == 2) { keyIndex = i; break; }
+            final int folderKey = keyIndex;
             XposedBridge.hookMethod(ctor, new XC_MethodHook() {
+                /**
+                 * The inbox UI (Compose, X.0DXE.A00 on IG 385713116) re-creates the header it draws,
+                 * and on a professional account it uses the "Requests" folder key: the Requests
+                 * folder look ("Most recent ⌄" + "Hidden requests"). While the module replaces the
+                 * folders bar, give it the main inbox key Instagram uses for personal accounts.
+                 */
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    if (BUILDING.get() || folderKey < 0 || !FeatureFlags.hideDirectFoldersBar
+                            || builtHeader == null) return;
+                    if (!"Requests".equals(param.args[folderKey])) return;
+                    param.args[folderKey] = "Inbox";
+                    if (!rewriteLogged) { rewriteLogged = true; diag("(IE|InboxFolders) drawn header key Requests -> Inbox"); }
+                }
+
                 @Override protected void afterHookedMethod(MethodHookParam param) {
                     if (BUILDING.get() || spied.size() >= 8) return;
                     String args = java.util.Arrays.toString(param.args);
