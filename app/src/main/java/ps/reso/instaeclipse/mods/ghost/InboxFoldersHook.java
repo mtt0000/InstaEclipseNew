@@ -278,7 +278,52 @@ public class InboxFoldersHook {
     private static volatile long pass;
     private static volatile long headerPass = -1;   // pass in which a header was produced
     private static volatile Constructor<?> headerCtor;
-    private static volatile boolean probeLogged, ctorLogged;
+    private static volatile boolean probeLogged, ctorLogged, dumpLogged;
+
+    /** One-time log of the shapes involved, so a header that doesn't show can be fixed from a user log. */
+    private static void dump(Object headerGen, Object folderItem) {
+        try {
+            StringBuilder sb = new StringBuilder("(IE|InboxFolders) DUMP slot=")
+                    .append(itemReturnType != null ? itemReturnType.getName() : "?")
+                    .append(" folderItem=").append(folderItem != null ? folderItem.getClass().getName() : "null");
+            Object vmGen = lastVmGeneratorRef.get();
+            Object holders = vmGen != null && holdersFieldRef != null ? holdersFieldRef.get(vmGen) : null;
+            if (holders != null) {
+                sb.append(" sections=[");
+                for (Field f : holders.getClass().getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+                    f.setAccessible(true);
+                    String n = sectionName(f.get(holders));
+                    if (n != null) sb.append(n).append(' ');
+                }
+                sb.append(']');
+            }
+            ModuleLog.line(sb.toString());
+            if (headerGen == null) { ModuleLog.line("(IE|InboxFolders) DUMP no INBOX_HEADER generator"); return; }
+            for (Class<?> c = headerGen.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                StringBuilder g = new StringBuilder("(IE|InboxFolders) DUMP headerGen ").append(c.getName()).append(" fields:");
+                for (Field f : c.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers())) continue;
+                    g.append(' ').append(f.getName()).append(':').append(f.getType().getName());
+                }
+                g.append(" methods:");
+                for (Method m : c.getDeclaredMethods()) {
+                    if (Modifier.isStatic(m.getModifiers())) continue;
+                    g.append(' ').append(m.getName()).append(java.util.Arrays.toString(m.getParameterTypes()))
+                            .append("->").append(m.getReturnType().getName());
+                }
+                ModuleLog.line(g.toString());
+                for (Field f : c.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers()) || !f.getType().getName().startsWith("X.")) continue;
+                    for (Constructor<?> k : f.getType().getDeclaredConstructors())
+                        ModuleLog.line("(IE|InboxFolders) DUMP ctor " + f.getType().getName()
+                                + java.util.Arrays.toString(k.getParameterTypes()));
+                }
+            }
+        } catch (Throwable t) {
+            ModuleLog.line("(IE|InboxFolders) DUMP failed: " + t);
+        }
+    }
 
     private static String sectionName(Object gen) {
         try {
@@ -309,10 +354,14 @@ public class InboxFoldersHook {
                 Object header = null;
                 if (headerPass != pass) {
                     Object headerGen = headerGenerator();
+                    if (!dumpLogged) { dumpLogged = true; dump(headerGen, param.getResult()); }
                     if (headerGen != null) header = buildHeader(headerGen, state);
                 }
                 // The slot must accept a header item, or Instagram's caller would crash on the cast.
-                if (header != null && itemReturnType != null && !itemReturnType.isInstance(header)) header = null;
+                if (header != null && itemReturnType != null && !itemReturnType.isInstance(header)) {
+                    if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) header " + header.getClass().getName() + " doesn't fit slot " + itemReturnType.getName()); }
+                    header = null;
+                }
                 if (header != null) headerPass = pass;
                 param.setResult(header); // null = just hide the bar (header already shown or unavailable)
                 break;
@@ -343,7 +392,10 @@ public class InboxFoldersHook {
             if (Modifier.isStatic(f.getModifiers()) || !f.getType().getName().startsWith("X.")) continue;
             if (headerConstructor(f.getType()) != null) { itemField = f; break; }
         }
-        if (itemField == null) return null;
+        if (itemField == null) {
+            if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) no header item field with a usable constructor"); }
+            return null;
+        }
         itemField.setAccessible(true);
         Object existing = itemField.get(headerGen);
         if (existing != null) return existing;
