@@ -46,4 +46,8 @@
     <string name="ig_batch_hide_action">Hide selected</string>
     <string name="ig_batch_hide_empty">No chats to list yet: open the inbox and let it load, then try again.</string>
     <string name="ig_batch_hide_done">%1$d chats hidden</string>
+
+    <!-- Hide folders bar: Instagram's personal-account inbox header shown in its place -->
+    <string name="ig_direct_header_messages">Messages</string>
+    <string name="ig_direct_header_requests">Requests</string>
 </resources>

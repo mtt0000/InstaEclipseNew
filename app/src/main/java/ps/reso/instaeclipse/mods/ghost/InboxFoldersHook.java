@@ -237,85 +237,197 @@ public class InboxFoldersHook {
             }
 
             if (sectionEnumField != null && singleItemGenMethod != null) {
-                final Field finalSectionEnumField = sectionEnumField;
+                sectionField = sectionEnumField;
+                holdersFieldRef = holdersField;
+                itemReturnType = singleItemGenMethod.getReturnType();
+                // One build pass of the inbox view model = one calculateAndApplyDiffUpdate call: the
+                // native header goes in only one slot per pass (INBOX_HEADER or the hidden FOLDER one).
+                XposedBridge.hookMethod(diffUpdateMethodResolved, new XC_MethodHook() {
+                    @Override protected void beforeHookedMethod(MethodHookParam param) { pass++; }
+                });
                 XposedBridge.hookMethod(singleItemGenMethod, new XC_MethodHook() {
                     @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    protected void afterHookedMethod(MethodHookParam param) {
                         if (!FeatureFlags.hideDirectFoldersBar) return;
-                        Object gen = param.thisObject;
-                        Enum<?> secEnum = (Enum<?>) finalSectionEnumField.get(gen);
-                        if (secEnum == null) return;
-
-                        String secName = secEnum.name();
-                        if ("FOLDER".equals(secName) || "FILTER_ROW".equals(secName)) {
-                            param.setResult(null);
-                        } else if ("INBOX_HEADER".equals(secName) && param.getResult() == null) {
-                            Field headerItemField = null;
-                            Field userSessionField = null;
-                            for (Field f : gen.getClass().getDeclaredFields()) {
-                                if (f.getType().getName().endsWith(".UserSession")) userSessionField = f;
-                                else if (f.getType().getName().startsWith("X.")) headerItemField = f;
-                            }
-
-                            if (headerItemField != null) {
-                                headerItemField.setAccessible(true);
-                                Object existingHeader = headerItemField.get(gen);
-                                if (existingHeader == null) {
-                                    Object state = param.args[0];
-                                    Object c0iafInstance = null;
-                                    for (Field sf : state.getClass().getDeclaredFields()) {
-                                        if (sf.getType().isEnum() && sf.getType().getName().startsWith("X.")) {
-                                            sf.setAccessible(true);
-                                            c0iafInstance = sf.get(state);
-                                            break;
-                                        }
-                                    }
-                                    if (c0iafInstance == null) {
-                                        Class<?> enumClass = null;
-                                        for (Constructor<?> constructor : headerItemField.getType().getDeclaredConstructors()) {
-                                            for (Class<?> pType : constructor.getParameterTypes()) {
-                                                if (pType.isEnum()) { enumClass = pType; break; }
-                                            }
-                                        }
-                                        if (enumClass != null) c0iafInstance = enumClass.getEnumConstants()[0];
-                                    }
-
-                                    if (c0iafInstance != null) {
-                                        Class<?> headerClass = headerItemField.getType();
-                                        Constructor<?> headerConstructor = null;
-                                        for (Constructor<?> c : headerClass.getDeclaredConstructors()) {
-                                            if (c.getParameterCount() == 5) {
-                                                headerConstructor = c;
-                                                break;
-                                            }
-                                        }
-                                        if (headerConstructor != null) {
-                                            headerConstructor.setAccessible(true);
-                                            Context context = null;
-                                            try {
-                                                Class<?> appThreadClass = Class.forName("android.app.ActivityThread");
-                                                Method currentAppThreadMethod = appThreadClass.getDeclaredMethod("currentApplication");
-                                                context = (Context) currentAppThreadMethod.invoke(null);
-                                            } catch (Throwable ignored) {}
-                                            String msgTitle = context != null ? context.getString(context.getResources().getIdentifier("direct_header_title", "string", context.getPackageName())) : "Messages";
-                                            if (msgTitle == null || msgTitle.isEmpty()) msgTitle = "Messages";
-                                            String reqTitle = context != null ? context.getString(context.getResources().getIdentifier("direct_message_requests", "string", context.getPackageName())) : "Requests";
-                                            if (reqTitle == null || reqTitle.isEmpty()) reqTitle = "Requests";
-
-                                            Object newHeader = headerConstructor.newInstance(c0iafInstance, msgTitle, reqTitle, 0, true);
-                                            headerItemField.set(gen, newHeader);
-                                            param.setResult(newHeader);
-                                        }
-                                    }
-                                }
-                            }
+                        try {
+                            onSectionItem(param);
+                        } catch (Throwable t) {
+                            // Never leave the folder bar half-built: drop it, as the plain hide did.
+                            if (!"INBOX_HEADER".equals(sectionName(param.thisObject))) param.setResult(null);
+                            if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) header swap failed: " + t); }
                         }
                     }
                 });
+                ModuleLog.line("(IE|InboxFolders) section generators hooked");
             }
 
         } catch (Throwable t) {
             ModuleLog.line("(IE|InboxFolders) Error in VM generator hooks: " + t.getMessage());
         }
+    }
+
+    // ── Hide folders bar: show Instagram's own "Messages / Requests" header instead ──
+    // A personal account gets the INBOX_HEADER section ("Messages" + "Requests"); a professional
+    // one gets the FOLDER tabs (Primary / General / Requests) and no header. With the bar hidden we
+    // build that header item and put it where the bar was, so the inbox looks like a personal
+    // account's and Requests stays one tap away (Instagram's binder handles the tap).
+
+    private static Field sectionField;
+    private static Field holdersFieldRef;
+    private static Class<?> itemReturnType;
+    private static volatile long pass;
+    private static volatile long headerPass = -1;   // pass in which a header was produced
+    private static volatile Constructor<?> headerCtor;
+    private static volatile boolean probeLogged, ctorLogged;
+
+    private static String sectionName(Object gen) {
+        try {
+            if (gen == null || sectionField == null || !sectionField.getDeclaringClass().isInstance(gen)) return null;
+            Object e = sectionField.get(gen);
+            return e instanceof Enum<?> en ? en.name() : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static void onSectionItem(XC_MethodHook.MethodHookParam param) throws Throwable {
+        String sec = sectionName(param.thisObject);
+        if (sec == null) return;
+        Object state = param.args != null && param.args.length > 0 ? param.args[0] : null;
+        switch (sec) {
+            case "FILTER_ROW":
+                param.setResult(null);
+                break;
+            case "INBOX_HEADER": {
+                if (headerPass == pass) { param.setResult(null); break; } // already in the folder slot
+                Object header = param.getResult();
+                if (header == null) header = buildHeader(param.thisObject, state);
+                if (header != null) { headerPass = pass; param.setResult(header); }
+                break;
+            }
+            case "FOLDER": {
+                Object header = null;
+                if (headerPass != pass) {
+                    Object headerGen = headerGenerator();
+                    if (headerGen != null) header = buildHeader(headerGen, state);
+                }
+                // The slot must accept a header item, or Instagram's caller would crash on the cast.
+                if (header != null && itemReturnType != null && !itemReturnType.isInstance(header)) header = null;
+                if (header != null) headerPass = pass;
+                param.setResult(header); // null = just hide the bar (header already shown or unavailable)
+                break;
+            }
+            default:
+        }
+    }
+
+    /** The INBOX_HEADER section generator, from the view model generator's section holders. */
+    private static Object headerGenerator() throws Throwable {
+        Object vmGen = lastVmGeneratorRef.get();
+        if (vmGen == null || holdersFieldRef == null) return null;
+        Object holders = holdersFieldRef.get(vmGen);
+        if (holders == null) return null;
+        for (Field f : holders.getClass().getDeclaredFields()) {
+            if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+            f.setAccessible(true);
+            Object gen = f.get(holders);
+            if ("INBOX_HEADER".equals(sectionName(gen))) return gen;
+        }
+        return null;
+    }
+
+    /** The header item the INBOX_HEADER generator keeps (Instagram's own when it made one), else a new one. */
+    private static Object buildHeader(Object headerGen, Object state) throws Throwable {
+        Field itemField = null;
+        for (Field f : headerGen.getClass().getDeclaredFields()) {
+            if (Modifier.isStatic(f.getModifiers()) || !f.getType().getName().startsWith("X.")) continue;
+            if (headerConstructor(f.getType()) != null) { itemField = f; break; }
+        }
+        if (itemField == null) return null;
+        itemField.setAccessible(true);
+        Object existing = itemField.get(headerGen);
+        if (existing != null) return existing;
+
+        Constructor<?> ctor = headerConstructor(itemField.getType());
+        Class<?>[] types = ctor.getParameterTypes();
+        Object[] args = new Object[types.length];
+        Context ctx = ps.reso.instaeclipse.xposedcompat.AndroidAppHelper.currentApplication();
+        String[] titles = {headerTitle(ctx, true), headerTitle(ctx, false)};
+        int str = 0;
+        for (int i = 0; i < types.length; i++) {
+            Class<?> t = types[i];
+            if (t == String.class || t == CharSequence.class) args[i] = str < titles.length ? titles[str++] : "";
+            else if (t == int.class || t == Integer.class) args[i] = 0;          // pending request count
+            else if (t == long.class || t == Long.class) args[i] = 0L;
+            else if (t == boolean.class || t == Boolean.class) args[i] = Boolean.TRUE;
+            else if (t.isEnum()) args[i] = enumFor(t, state);
+        }
+        if (!ctorLogged) {
+            ctorLogged = true;
+            ModuleLog.line("(IE|InboxFolders) header item " + ctor.getDeclaringClass().getName()
+                    + java.util.Arrays.toString(types));
+        }
+        Object header = ctor.newInstance(args);
+        itemField.set(headerGen, header);
+        return header;
+    }
+
+    /** A constructor taking two or more Strings and otherwise only enums / numbers / booleans. */
+    private static Constructor<?> headerConstructor(Class<?> type) {
+        Constructor<?> cached = headerCtor;
+        if (cached != null && cached.getDeclaringClass() == type) return cached;
+        for (Constructor<?> c : type.getDeclaredConstructors()) {
+            int strings = 0;
+            boolean ok = true;
+            for (Class<?> p : c.getParameterTypes()) {
+                if (p == String.class || p == CharSequence.class) strings++;
+                else if (!(p.isEnum() || p == int.class || p == Integer.class || p == long.class || p == Long.class
+                        || p == boolean.class || p == Boolean.class)) { ok = false; break; }
+            }
+            if (ok && strings >= 2) {
+                c.setAccessible(true);
+                headerCtor = c;
+                return c;
+            }
+        }
+        return null;
+    }
+
+    /** The state's own value of that enum when it has one, else the enum's first constant. */
+    private static Object enumFor(Class<?> enumType, Object state) {
+        if (state != null) {
+            for (Field f : state.getClass().getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers()) || f.getType() != enumType) continue;
+                try {
+                    f.setAccessible(true);
+                    Object v = f.get(state);
+                    if (v != null) return v;
+                } catch (Throwable ignored) {}
+            }
+        }
+        Object[] all = enumType.getEnumConstants();
+        return all != null && all.length > 0 ? all[0] : null;
+    }
+
+    /** Instagram's own label when one of its string names exists, else the module's translation. */
+    @android.annotation.SuppressLint("DiscouragedApi")
+    static String headerTitle(Context ctx, boolean messages) {
+        String[] names = messages
+                ? new String[]{"direct_header_title", "direct_inbox_header_title", "direct_messages_title", "messages"}
+                : new String[]{"direct_message_requests", "direct_requests_title", "direct_message_requests_title", "requests"};
+        if (ctx != null) {
+            for (String n : names) {
+                try {
+                    int id = ctx.getResources().getIdentifier(n, "string", ctx.getPackageName());
+                    if (id == 0) continue;
+                    String v = ctx.getString(id);
+                    if (v != null && !v.trim().isEmpty() && !v.contains("%")) return v;
+                } catch (Throwable ignored) {}
+            }
+            String mine = ps.reso.instaeclipse.utils.i18n.I18n.t(ctx,
+                    messages ? ps.reso.instaeclipse.R.string.ig_direct_header_messages : ps.reso.instaeclipse.R.string.ig_direct_header_requests);
+            if (!mine.isEmpty()) return mine;
+        }
+        return messages ? "Messages" : "Requests";
     }
 }
