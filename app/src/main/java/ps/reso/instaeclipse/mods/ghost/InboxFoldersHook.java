@@ -396,7 +396,7 @@ public class InboxFoldersHook {
         return null;
     }
 
-    /** The header item the INBOX_HEADER generator keeps (Instagram's own when it made one), else a new one. */
+    /** A main-inbox header item of the type the INBOX_HEADER generator uses. */
     private static Object buildHeader(Object headerGen, Object state) throws Throwable {
         Field itemField = null;
         for (Field f : headerGen.getClass().getDeclaredFields()) {
@@ -407,9 +407,10 @@ public class InboxFoldersHook {
             if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) no header item field with a usable constructor"); }
             return null;
         }
-        itemField.setAccessible(true);
-        Object existing = itemField.get(headerGen);
-        if (existing != null) return existing;
+        // Our own item, cached here: the generator's field may hold Instagram's Requests-folder header
+        // (the same generator serves that view), and writing into it would change that view too.
+        Object cached = builtHeader;
+        if (cached != null && cached.getClass() == itemField.getType()) return cached;
 
         Constructor<?> ctor = headerConstructor(itemField.getType());
         Class<?>[] types = ctor.getParameterTypes();
@@ -422,16 +423,16 @@ public class InboxFoldersHook {
             if (t == String.class || t == CharSequence.class) args[i] = str < titles.length ? titles[str++] : "";
             else if (t == int.class || t == Integer.class) args[i] = 0;          // pending request count
             else if (t == long.class || t == Long.class) args[i] = 0L;
-            else if (t == boolean.class || t == Boolean.class) args[i] = Boolean.TRUE;
+            else if (t == boolean.class || t == Boolean.class) args[i] = Boolean.FALSE; // neutral: a flag may mean "requests view"
             else if (t.isEnum()) args[i] = enumFor(t, state);
         }
         if (!ctorLogged) {
             ctorLogged = true;
             ModuleLog.line("(IE|InboxFolders) header item " + ctor.getDeclaringClass().getName()
-                    + java.util.Arrays.toString(types));
+                    + java.util.Arrays.toString(types) + " args=" + java.util.Arrays.toString(args));
         }
         Object header = ctor.newInstance(args);
-        itemField.set(headerGen, header);
+        builtHeader = header;
         return header;
     }
 
@@ -456,20 +457,55 @@ public class InboxFoldersHook {
         return null;
     }
 
-    /** The state's own value of that enum when it has one, else the enum's first constant. */
-    private static Object enumFor(Class<?> enumType, Object state) {
+    /**
+     * The header's mode. The same item draws the main inbox header ("Messages" / "Requests") and
+     * the Requests folder one ("Sort by" / "Hidden requests"); the enum picks which. Prefer a
+     * main-inbox constant by name, never a requests / spam one; the state's own value only when it
+     * isn't one of those, else the first constant that isn't.
+     */
+    static Object enumFor(Class<?> enumType, Object state) {
+        Object[] all = enumType.getEnumConstants();
+        if (all == null || all.length == 0) return null;
+        Object best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (Object c : all) {
+            int score = enumScore(((Enum<?>) c).name());
+            if (score > bestScore) { bestScore = score; best = c; }
+        }
+        Object fromState = null;
         if (state != null) {
             for (Field f : state.getClass().getDeclaredFields()) {
                 if (Modifier.isStatic(f.getModifiers()) || f.getType() != enumType) continue;
                 try {
                     f.setAccessible(true);
-                    Object v = f.get(state);
-                    if (v != null) return v;
+                    fromState = f.get(state);
+                    if (fromState != null) break;
                 } catch (Throwable ignored) {}
             }
         }
-        Object[] all = enumType.getEnumConstants();
-        return all != null && all.length > 0 ? all[0] : null;
+        // A main-inbox name wins; with no telling names, the state's value unless it's a requests one.
+        Object chosen = bestScore > 0 ? best
+                : fromState != null && enumScore(((Enum<?>) fromState).name()) >= 0 ? fromState : best;
+        if (!enumLogged) {
+            enumLogged = true;
+            ModuleLog.line("(IE|InboxFolders) header mode " + enumType.getName() + java.util.Arrays.toString(all)
+                    + " state=" + fromState + " chosen=" + chosen);
+        }
+        return chosen;
+    }
+
+    private static volatile boolean enumLogged;
+    private static volatile Object builtHeader;
+
+    /** > 0: main inbox; < 0: requests / spam / hidden / other folders; 0: can't tell. */
+    static int enumScore(String name) {
+        String n = name.toUpperCase(java.util.Locale.ROOT);
+        if (n.contains("PENDING") || n.contains("REQUEST") || n.contains("SPAM") || n.contains("HIDDEN")
+                || n.contains("FILTER") || n.contains("ARCHIV") || n.contains("GENERAL") || n.contains("BUSINESS")
+                || n.contains("SECONDARY")) return -1;
+        if (n.contains("INBOX") || n.contains("PRIMARY") || n.contains("MESSAGE") || n.contains("MAIN")
+                || n.contains("DEFAULT") || n.equals("ALL") || n.contains("REGULAR") || n.contains("NORMAL")) return 1;
+        return 0;
     }
 
     /** Instagram's own label when one of its string names exists, else the module's translation. */
