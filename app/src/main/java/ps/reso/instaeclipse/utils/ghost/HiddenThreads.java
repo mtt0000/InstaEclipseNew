@@ -57,6 +57,11 @@ public class HiddenThreads {
     public static HiddenThreadStore.Result setHidden(String account, String thread, String title, boolean hidden) {
         HiddenThreadStore current = store();
         if (current == null) return new HiddenThreadStore.Result(false, false, "Application storage is unavailable.");
+        // No usable title from the caller (e.g. a chat header with no title view): name it from the inbox rows.
+        if (hidden && ps.reso.instaeclipse.mods.ghost.BatchHideChatsHook.isPlaceholderTitle(title, thread)) {
+            String live = ps.reso.instaeclipse.mods.ghost.BatchHideChatsHook.liveTitle(account, thread);
+            if (live != null) title = live;
+        }
         HiddenThreadStore.Result result = current.setHidden(account, thread, title, hidden);
         if (!result.success) ModuleLog.line("(IE|HiddenThreads) persistence failed; original state preserved");
         return result;

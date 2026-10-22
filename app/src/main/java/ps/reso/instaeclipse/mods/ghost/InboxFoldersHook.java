@@ -132,10 +132,35 @@ public class InboxFoldersHook {
             diffUpdateMethod = diffUpdateMethodResolved;
             Class<?> vmGenClass = diffUpdateMethodResolved.getParameterTypes()[0];
 
+            // IG 385811006 keeps the section generators in a Map and the diff update applies them one
+            // by one through a static applier(collector, generator, state, capabilities) -> boolean:
+            // its parameters give the inbox state class and the generators' base class (which holds
+            // the section enum). Older builds kept them as fields of one holders object (fallback below).
+            Class<?> stateClass = null, genBase = null;
+            Field sectionEnumField = null;
+            for (MethodData inv : diffUpdates.get(0).getInvokes()) {
+                if (!"boolean".equals(inv.getReturnTypeName()) || inv.getParamTypeNames().size() != 4) continue;
+                try {
+                    Method m = inv.getMethodInstance(loader);
+                    if (!Modifier.isStatic(m.getModifiers())) continue;
+                    Field ef = sectionEnumFieldOf(m.getParameterTypes()[1]);
+                    if (ef == null) continue;
+                    genBase = m.getParameterTypes()[1];
+                    sectionEnumField = ef;
+                    stateClass = m.getParameterTypes()[2];
+                    sectionField = ef;
+                    break;
+                } catch (Throwable ignored) {}
+            }
+
             Field vmStateField = null;
             for (Field f : vmGenClass.getDeclaredFields()) {
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 if (!f.getType().getName().startsWith("X.")) continue;
+                if (stateClass != null) {
+                    if (f.getType() == stateClass) { vmStateField = f; break; }
+                    continue;
+                }
 
                 int listCount = 0;
                 for (Field sf : f.getType().getDeclaredFields()) {
@@ -148,21 +173,26 @@ public class InboxFoldersHook {
             }
 
             Field holdersField = null;
-            for (Field f : vmGenClass.getDeclaredFields()) {
-                if (Modifier.isStatic(f.getModifiers())) continue;
-                if (!f.getType().getName().startsWith("X.")) continue;
+            if (genBase == null) {
+                for (Field f : vmGenClass.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers())) continue;
+                    if (!f.getType().getName().startsWith("X.")) continue;
 
-                if (f.getType().getDeclaredFields().length >= 20) {
-                    holdersField = f;
-                    break;
+                    if (f.getType().getDeclaredFields().length >= 20) {
+                        holdersField = f;
+                        break;
+                    }
                 }
             }
 
-            if (vmStateField == null || holdersField == null) return;
+            diag("(IE|InboxFolders) vm " + vmGenClass.getName() + " state=" + (vmStateField != null ? vmStateField.getType().getName() : "?")
+                    + " generators=" + (genBase != null ? genBase.getName() : holdersField != null ? "holders " + holdersField.getType().getName() : "?"));
+            if (vmStateField == null || (genBase == null && holdersField == null)) return;
             vmStateField.setAccessible(true);
-            holdersField.setAccessible(true);
-            Class<?> stateClass = vmStateField.getType();
-            Class<?> holdersClass = holdersField.getType();
+            if (holdersField != null) holdersField.setAccessible(true);
+            if (stateClass == null) stateClass = vmStateField.getType();
+            final Class<?> finalStateClass = stateClass;
+            Class<?> holdersClass = holdersField != null ? holdersField.getType() : null;
 
             for (Method m : vmGenClass.getDeclaredMethods()) {
                 if (Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 1 && m.getParameterTypes()[0] == vmGenClass && m.getReturnType() == void.class) {
@@ -177,7 +207,7 @@ public class InboxFoldersHook {
 
                                 if (FeatureFlags.emptyGeneralFolder && isStateInGeneralFolder(state)) {
                                     Map<Field, Object> backup = new HashMap<>();
-                                    for (Field f : stateClass.getDeclaredFields()) {
+                                    for (Field f : finalStateClass.getDeclaredFields()) {
                                         if (f.getType() == java.util.List.class && !Modifier.isStatic(f.getModifiers())) {
                                             f.setAccessible(true);
                                             backup.put(f, f.get(state));
@@ -207,10 +237,36 @@ public class InboxFoldersHook {
                 }
             }
 
-            Field sectionEnumField = null;
             Method singleItemGenMethod = null;
 
-            for (Field f : holdersClass.getDeclaredFields()) {
+            if (genBase != null) {
+                // The single-item generators share one item method taking the state (a final
+                // dispatcher on IG 385811006), declared in a direct subclass of the base.
+                for (ClassData cd : bridge.findClass(FindClass.create()
+                        .matcher(ClassMatcher.create().superClass(genBase.getName())))) {
+                    Class<?> c;
+                    try { c = cd.getInstance(loader); } catch (Throwable t) { continue; }
+                    for (Method sm : c.getDeclaredMethods()) {
+                        int mod = sm.getModifiers();
+                        if (Modifier.isStatic(mod) || Modifier.isAbstract(mod) || sm.getParameterCount() != 1
+                                || sm.getParameterTypes()[0] != stateClass || sm.getReturnType() == void.class
+                                || java.util.Collection.class.isAssignableFrom(sm.getReturnType())) continue;
+                        singleItemGenMethod = sm;
+                        singleItemGenMethod.setAccessible(true);
+                        break;
+                    }
+                    if (singleItemGenMethod != null) break;
+                }
+                // Every generator, by section: INBOX_HEADER's is needed even when its section isn't drawn.
+                XposedBridge.hookAllConstructors(genBase, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        String n = sectionName(param.thisObject);
+                        if (n != null) GENERATORS.put(n, new WeakReference<>(param.thisObject));
+                    }
+                });
+            }
+
+            for (Field f : holdersClass != null ? holdersClass.getDeclaredFields() : new Field[0]) {
                 if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive() || !f.getType().getName().startsWith("X.")) continue;
 
                 Class<?> genType = f.getType();
@@ -244,7 +300,7 @@ public class InboxFoldersHook {
                 // The section holders (one generator per inbox section, INBOX_HEADER among them):
                 // remembered at construction, since on IG 385713116 the view-model generator
                 // methods above never run, so they can't be read through it.
-                XposedBridge.hookAllConstructors(holdersClass, new XC_MethodHook() {
+                if (holdersClass != null) XposedBridge.hookAllConstructors(holdersClass, new XC_MethodHook() {
                     @Override protected void afterHookedMethod(MethodHookParam param) {
                         if (param.thisObject != null) holdersRef = new WeakReference<>(param.thisObject);
                     }
@@ -263,7 +319,11 @@ public class InboxFoldersHook {
                         }
                     }
                 });
-                diag("(IE|InboxFolders) section generators hooked");
+                diag("(IE|InboxFolders) section generators hooked: " + singleItemGenMethod.getDeclaringClass().getName()
+                        + "#" + singleItemGenMethod.getName());
+            } else {
+                diag("(IE|InboxFolders) section generators NOT hooked: enum=" + (sectionEnumField != null)
+                        + " itemMethod=" + (singleItemGenMethod != null));
             }
 
         } catch (Throwable t) {
@@ -408,8 +468,10 @@ public class InboxFoldersHook {
                 }
                 sb.append(']');
             }
+            if (!GENERATORS.isEmpty()) sb.append(" generators=").append(GENERATORS.keySet());
             diag(sb.toString());
-            if (headerGen == null) { diag("(IE|InboxFolders) DUMP no INBOX_HEADER generator (holders " + (holders != null ? "found" : "missing") + ")"); return; }
+            if (headerGen == null) { diag("(IE|InboxFolders) DUMP no INBOX_HEADER generator (holders " + (holders != null ? "found" : "missing")
+                    + ", generators " + GENERATORS.size() + ")"); return; }
             for (Class<?> c = headerGen.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
                 StringBuilder g = new StringBuilder("(IE|InboxFolders) DUMP headerGen ").append(c.getName()).append(" fields:");
                 for (Field f : c.getDeclaredFields()) {
@@ -486,8 +548,25 @@ public class InboxFoldersHook {
         return vmGen != null && holdersFieldRef != null ? holdersFieldRef.get(vmGen) : null;
     }
 
-    /** The INBOX_HEADER section generator, from the view model generator's section holders. */
+    /** Section generators by section name, recorded at construction (IG 385811006 layout). */
+    private static final Map<String, WeakReference<Object>> GENERATORS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The section enum field of a generator base class: a non-static field of an X. enum type. */
+    private static Field sectionEnumFieldOf(Class<?> base) {
+        if (base == null || !base.getName().startsWith("X.")) return null;
+        for (Field f : base.getDeclaredFields()) {
+            if (Modifier.isStatic(f.getModifiers()) || !f.getType().isEnum() || !f.getType().getName().startsWith("X.")) continue;
+            f.setAccessible(true);
+            return f;
+        }
+        return null;
+    }
+
+    /** The INBOX_HEADER section generator, from the recorded generators or the section holders. */
     private static Object headerGenerator() throws Throwable {
+        WeakReference<Object> ref = GENERATORS.get("INBOX_HEADER");
+        Object recorded = ref != null ? ref.get() : null;
+        if (recorded != null) return recorded;
         Object holders = holders();
         if (holders == null) return null;
         for (Field f : holders.getClass().getDeclaredFields()) {

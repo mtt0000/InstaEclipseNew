@@ -2056,7 +2056,11 @@ public class DialogUtils {
         LinearLayout cardView = card(context);
         for (java.util.Map.Entry<String, String> e : hidden.entrySet()) {
             final String id = e.getKey();
-            String label = (e.getValue() == null || e.getValue().isEmpty()) ? id : e.getValue();
+            // The members' usernames from the inbox rows when loaded: titles saved by older builds can be
+            // the thread id or a stray row string.
+            String live = ps.reso.instaeclipse.mods.ghost.BatchHideChatsHook.liveTitle(account, id);
+            String label = live != null ? live
+                    : (e.getValue() == null || e.getValue().isEmpty()) ? id : e.getValue();
             cardView.addView(createActionRow(context, R.drawable.ic_eye, label + "  ·  "
                     + I18n.t(context, R.string.ig_hide_chats_unhide), "#BF5AF2", v -> {
                 if (!account.equals(ps.reso.instaeclipse.utils.ghost.CurrentConversation.accountId(activity))) {
