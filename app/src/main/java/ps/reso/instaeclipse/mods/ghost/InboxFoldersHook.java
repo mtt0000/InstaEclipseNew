@@ -276,6 +276,7 @@ public class InboxFoldersHook {
     // 385713116, FOLDER on older builds) and no header. With the bar hidden we build that header
     // item and put it where the bar was, so the inbox looks like a personal account's and Requests
     // stays one tap away (Instagram's binder handles the tap).
+    // The item is X.08Yp(sort mode, "Messages", folder key, count, flag) on IG 385713116.
 
     private static Field sectionField;
     private static Field holdersFieldRef;
@@ -416,12 +417,15 @@ public class InboxFoldersHook {
         spyOnInstagramHeaders(ctor);
         Class<?>[] types = ctor.getParameterTypes();
         Object[] args = new Object[types.length];
-        Context ctx = ps.reso.instaeclipse.xposedcompat.AndroidAppHelper.currentApplication();
-        String[] titles = {headerTitle(ctx, true), headerTitle(ctx, false)};
+        // The values Instagram itself passes for a personal account's inbox (seen on IG 385713116:
+        // [DEFAULT, "Messages", "Inbox", 0, false]). The Strings are keys, not labels: the second one
+        // names the folder, and "Requests" there turns it into the Requests folder header
+        // ("Most recent ⌄" sort + "Hidden requests"). Not translated, like Instagram's own.
+        String[] keys = {"Messages", "Inbox"};
         int str = 0;
         for (int i = 0; i < types.length; i++) {
             Class<?> t = types[i];
-            if (t == String.class || t == CharSequence.class) args[i] = str < titles.length ? titles[str++] : "";
+            if (t == String.class || t == CharSequence.class) args[i] = str < keys.length ? keys[str++] : "";
             else if (t == int.class || t == Integer.class) args[i] = 0;          // pending request count
             else if (t == long.class || t == Long.class) args[i] = 0L;
             else if (t == boolean.class || t == Boolean.class) args[i] = Boolean.FALSE; // neutral: a flag may mean "requests view"
@@ -569,27 +573,5 @@ public class InboxFoldersHook {
         if (n.contains("INBOX") || n.contains("PRIMARY") || n.contains("MESSAGE") || n.contains("MAIN")
                 || n.contains("DEFAULT") || n.equals("ALL") || n.contains("REGULAR") || n.contains("NORMAL")) return 1;
         return 0;
-    }
-
-    /** Instagram's own label when one of its string names exists, else the module's translation. */
-    @android.annotation.SuppressLint("DiscouragedApi")
-    static String headerTitle(Context ctx, boolean messages) {
-        String[] names = messages
-                ? new String[]{"direct_header_title", "direct_inbox_header_title", "direct_messages_title", "messages"}
-                : new String[]{"direct_message_requests", "direct_requests_title", "direct_message_requests_title", "requests"};
-        if (ctx != null) {
-            for (String n : names) {
-                try {
-                    int id = ctx.getResources().getIdentifier(n, "string", ctx.getPackageName());
-                    if (id == 0) continue;
-                    String v = ctx.getString(id);
-                    if (v != null && !v.trim().isEmpty() && !v.contains("%")) return v;
-                } catch (Throwable ignored) {}
-            }
-            String mine = ps.reso.instaeclipse.utils.i18n.I18n.t(ctx,
-                    messages ? ps.reso.instaeclipse.R.string.ig_direct_header_messages : ps.reso.instaeclipse.R.string.ig_direct_header_requests);
-            if (!mine.isEmpty()) return mine;
-        }
-        return messages ? "Messages" : "Requests";
     }
 }

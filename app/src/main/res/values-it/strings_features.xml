@@ -47,9 +47,6 @@
     <string name="ig_batch_hide_empty">Nessuna chat da mostrare: apri l\'inbox, attendi che si carichi e riprova.</string>
     <string name="ig_batch_hide_done">%1$d chat nascoste</string>
 
-    <!-- Hide folders bar: Instagram's personal-account inbox header shown in its place -->
-    <string name="ig_direct_header_messages">Messaggi</string>
-    <string name="ig_direct_header_requests">Richieste</string>
 
     <!-- Hide folders bar: diagnostics shown in the module menu -->
     <string name="ig_folders_diag_title">Diagnostica barra cartelle</string>
