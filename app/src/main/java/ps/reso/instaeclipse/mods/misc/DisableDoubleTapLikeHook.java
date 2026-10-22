@@ -1,6 +1,7 @@
 package ps.reso.instaeclipse.mods.misc;
 
 import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewParent;
 
@@ -294,24 +295,36 @@ public class DisableDoubleTapLikeHook {
     static final class LikeActionBinding {
         static LikeActionBinding create(Method setter, Method dispatcher, Method action, List<Method> invokes) {
             if (setter == null || dispatcher == null || action == null || invokes == null) return null;
-            if (setter.getDeclaringClass() != dispatcher.getDeclaringClass()
-                    || setter.getReturnType() != void.class || dispatcher.getReturnType() != void.class
+            if (setter.getReturnType() != void.class
                     || setter.getParameterTypes().length != 1 || action.getReturnType() != Object.class
                     || !"invoke".equals(action.getName()) || !instanceMethod(setter)
                     || !instanceMethod(dispatcher) || !instanceMethod(action)) return null;
             Class<?> contract = setter.getParameterTypes()[0];
             Class<?>[] dispatchTypes = dispatcher.getParameterTypes();
-            if (!contract.isInterface() || !contract.isAssignableFrom(action.getDeclaringClass())
-                    || dispatchTypes.length != 6 || dispatchTypes[0] != View.class
-                    || dispatchTypes[4] != boolean.class || dispatchTypes[5] != boolean.class) return null;
+            if (!contract.isInterface() || !contract.isAssignableFrom(action.getDeclaringClass())) return null;
+            // IG ≤ 447: the handler's own void dispatcher(View, item, state, location, boolean, boolean).
+            boolean handlerDispatcher = setter.getDeclaringClass() == dispatcher.getDeclaringClass()
+                    && dispatcher.getReturnType() == void.class && dispatchTypes.length == 6
+                    && dispatchTypes[0] == View.class && dispatchTypes[4] == boolean.class
+                    && dispatchTypes[5] == boolean.class;
+            // IG 385811006: that dispatcher is inlined into the gesture listener's onDoubleTap(MotionEvent).
+            boolean gestureDispatcher = "onDoubleTap".equals(dispatcher.getName())
+                    && dispatcher.getReturnType() == boolean.class && dispatchTypes.length == 1
+                    && dispatchTypes[0] == MotionEvent.class;
+            if (!handlerDispatcher && !gestureDispatcher) return null;
             Class<?>[] types = action.getParameterTypes();
             if (types.length != 4) return null;
             for (Class<?> type : types) if (type != Object.class) return null;
-            try {
-                Method invoke = contract.getMethod("invoke", Object.class, Object.class, Object.class, Object.class);
-                if (invoke.getReturnType() != Object.class || !invokes.contains(invoke)) return null;
-            } catch (NoSuchMethodException e) { return null; }
-            return new LikeActionBinding();
+            // The dispatcher must call the contract's 4-argument invoke (declared on the contract or on
+            // one of the interfaces it extends).
+            for (Method invoke : invokes) {
+                if (invoke == null || !"invoke".equals(invoke.getName()) || invoke.getReturnType() != Object.class
+                        || !invoke.getDeclaringClass().isAssignableFrom(contract)) continue;
+                Class<?>[] p = invoke.getParameterTypes();
+                if (p.length == 4 && p[0] == Object.class && p[1] == Object.class && p[2] == Object.class
+                        && p[3] == Object.class) return new LikeActionBinding();
+            }
+            return null;
         }
 
         private static boolean instanceMethod(Method method) {

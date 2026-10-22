@@ -95,6 +95,17 @@ public class DoubleTapExtrasHook {
                     .returnType("void").usingStrings("double_tap", "should_show_like_direct_message_count")))) {
                 if (md.isMethod()) out.add(md.getMethodInstance(cl));
             }
+            if (!out.isEmpty()) return out;
+            // IG 385811006 moved the like-count check out of the handler: the same static
+            // (X, X, X, String, String, List, boolean) void method, found by "double_tap" and that shape.
+            for (MethodData md : DexKitQueryCache.findMethod(bridge, FindMethod.create().matcher(MethodMatcher.create()
+                    .returnType("void").paramCount(7).usingEqStrings("double_tap")))) {
+                if (!md.isMethod()) continue;
+                Method m = md.getMethodInstance(cl);
+                Class<?>[] p = m.getParameterTypes();
+                if (java.lang.reflect.Modifier.isStatic(m.getModifiers()) && p[3] == String.class && p[4] == String.class
+                        && p[5] == List.class && p[6] == boolean.class) out.add(m);
+            }
             return out;
         });
         for (Method m : composeDirect) XposedBridge.hookMethod(m, SKIP);

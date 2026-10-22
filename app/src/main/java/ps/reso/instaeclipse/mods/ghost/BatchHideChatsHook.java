@@ -76,7 +76,8 @@ public final class BatchHideChatsHook {
 
     /** Called with each inbox list the store builds, before hidden chats are filtered out. */
     static void recordInbox(Object store, List<?> rows) {
-        if (!FeatureFlags.hideSpecificChats || !FeatureFlags.enableBatchHideChats || rows == null || rows.isEmpty()) return;
+        // Recorded whenever chats can be hidden: the hidden chats manager names them from these rows too.
+        if (!FeatureFlags.hideSpecificChats || rows == null || rows.isEmpty()) return;
         String account = CurrentConversation.accountIdOf(store);
         if (account == null) return;
         Deque<List<?>> lists = recentRows.computeIfAbsent(account, k -> new ArrayDeque<>());
@@ -265,22 +266,23 @@ public final class BatchHideChatsHook {
 
     /**
      * The chat's name, best source first:
-     * 1. a row string that is shown in the inbox right now (the row's own label);
-     * 2. the usernames of the chat's members: the {@code User} objects the row holds, read with
-     *    the module's username getter, leaving out the account itself;
+     * 1. the usernames of the chat's members: the {@code User} / {@code PendingRecipient} objects
+     *    the row holds, leaving out the account itself (a row string shown on screen can be the
+     *    last message preview, so it no longer comes first);
+     * 2. a row string that is shown in the inbox right now (the row's own label);
      * 3. a row string that looks like a display / group name (not a status word like "unknown");
      * 4. "Chat …" + the end of the thread id.
      */
     static String titleOf(Object row, String id, String account, Set<String> onScreen) {
-        List<String> strings = new ArrayList<>();
-        collectStrings(row, strings, Collections.newSetFromMap(new java.util.IdentityHashMap<>()), 0);
-        for (String s : strings) if (onScreen.contains(s.trim()) && looksLikeName(s, id)) return s.trim();
-
         List<String> members = memberUsernames(row, account);
         if (!members.isEmpty()) {
             String names = String.join(", ", members.subList(0, Math.min(3, members.size())));
             return members.size() > 3 ? names + " +" + (members.size() - 3) : names;
         }
+
+        List<String> strings = new ArrayList<>();
+        collectStrings(row, strings, Collections.newSetFromMap(new java.util.IdentityHashMap<>()), 0);
+        for (String s : strings) if (onScreen.contains(s.trim()) && looksLikeName(s, id)) return s.trim();
         for (String s : strings) if (looksLikeName(s, id)) return s.trim();
         return fallbackName(id);
     }
@@ -308,23 +310,100 @@ public final class BatchHideChatsHook {
     }
 
     private static final String USER = "com.instagram.user.model.User";
+    /** A chat member as the inbox row keeps it on IG 385811006 (in its DirectShareTarget), not a User. */
+    private static final String RECIPIENT = "com.instagram.pendingmedia.model.recipients.PendingRecipient";
 
-    /** Usernames of the User objects reachable from the row (members), without the account itself. */
+    /** The chat's current name from the inbox rows seen for {@code account}, or null when not loaded. */
+    public static String liveTitle(String account, String id) {
+        if (account == null || id == null) return null;
+        Deque<List<?>> lists = recentRows.get(account);
+        if (lists == null) return null;
+        synchronized (lists) {
+            for (List<?> list : lists) for (Object row : list) {
+                if (!id.equals(HiddenInboxFilter.threadIdOfRow(row))) continue;
+                String t = titleOf(row, id, account, Collections.emptySet());
+                return t.equals(fallbackName(id)) ? null : t;
+            }
+        }
+        return null;
+    }
+
+    /** True when {@code label} is no real chat name: empty, the thread id or the "Chat …id" fallback. */
+    public static boolean isPlaceholderTitle(String label, String id) {
+        return label == null || label.trim().isEmpty() || label.equals(id) || (id != null && label.equals(fallbackName(id)));
+    }
+
+    /** Usernames of the members (User / PendingRecipient objects) reachable from the row, without the account itself. */
     private static List<String> memberUsernames(Object row, String account) {
         List<Object> users = new ArrayList<>();
         collectUsers(row, users, Collections.newSetFromMap(new java.util.IdentityHashMap<>()), 0);
         List<String> out = new ArrayList<>();
         for (Object u : users) {
-            if (account != null && hasId(u, account)) continue;
-            String name = ps.reso.instaeclipse.utils.users.UserUtils.callUsernameGetter(u);
+            String name;
+            if (u.getClass().getName().equals(RECIPIENT)) {
+                if (account != null && account.equals(recipientId(u))) continue;
+                name = recipientUsername(u);
+            } else {
+                if (account != null && hasId(u, account)) continue;
+                name = ps.reso.instaeclipse.utils.users.UserUtils.callUsernameGetter(u);
+            }
             if (name != null && !NOT_NAMES.contains(name) && !out.contains(name)) out.add(name);
         }
         return out;
     }
 
+    private static volatile Field recipientUsernameField;
+    private static volatile boolean recipientProbed;
+
+    private static String recipientId(Object recipient) {
+        try {
+            Object id = recipient.getClass().getMethod("getId").invoke(recipient);
+            return id instanceof String s ? s : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * A PendingRecipient's username. Its field is found once by building a probe recipient with the
+     * public (ImageUrl, String id, String username) constructor and seeing which field holds the
+     * probe username: no obfuscated name involved.
+     */
+    private static String recipientUsername(Object recipient) {
+        if (!recipientProbed) {
+            recipientProbed = true;
+            try {
+                Class<?> rc = recipient.getClass();
+                Class<?> imageUrl = rc.getClassLoader().loadClass("com.instagram.common.typedurl.ImageUrl");
+                Object url = java.lang.reflect.Proxy.newProxyInstance(rc.getClassLoader(), new Class<?>[]{imageUrl},
+                        (p, m, a) -> m.getReturnType() == boolean.class ? Boolean.FALSE
+                                : m.getReturnType() == int.class ? 0 : m.getReturnType() == long.class ? 0L : null);
+                String probe = "ie_probe_username";
+                Object sample = rc.getConstructor(imageUrl, String.class, String.class).newInstance(url, "ie_probe_id", probe);
+                for (Field f : ps.reso.instaeclipse.utils.core.SafeReflect.fields(rc)) {
+                    if (Modifier.isStatic(f.getModifiers()) || f.getType() != String.class) continue;
+                    f.setAccessible(true);
+                    if (probe.equals(f.get(sample))) { recipientUsernameField = f; break; }
+                }
+                ModuleLog.line(TAG + "recipient username field " + (recipientUsernameField != null ? recipientUsernameField.getName() : "not found"));
+            } catch (Throwable t) {
+                ModuleLog.line(TAG + "recipient username probe failed: " + t);
+            }
+        }
+        Field f = recipientUsernameField;
+        if (f == null) return null;
+        try {
+            Object v = f.get(recipient);
+            return v instanceof String s && !s.isEmpty() ? s : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private static void collectUsers(Object obj, List<Object> out, Set<Object> seen, int depth) {
         if (obj == null || depth > 4 || out.size() > 16 || !seen.add(obj)) return;
-        if (obj.getClass().getName().equals(USER)) { out.add(obj); return; }
+        String objClass = obj.getClass().getName();
+        if (objClass.equals(USER) || objClass.equals(RECIPIENT)) { out.add(obj); return; }
         if (obj instanceof java.util.Collection<?> c) {
             int n = 0;
             for (Object o : c) { if (n++ > 32) break; collectUsers(o, out, seen, depth + 1); }

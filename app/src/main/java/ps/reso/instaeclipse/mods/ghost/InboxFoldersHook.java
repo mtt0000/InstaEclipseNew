@@ -38,6 +38,7 @@ public class InboxFoldersHook {
     public void install(DexKitBridge bridge, ClassLoader loader) {
         installFolderDescriptorHooks(bridge, loader);
         installVmGeneratorHooks(bridge, loader);
+        installHeaderStyleHooks(bridge, loader);
     }
 
     public static void refreshActiveInbox(Activity activity) {
@@ -131,10 +132,35 @@ public class InboxFoldersHook {
             diffUpdateMethod = diffUpdateMethodResolved;
             Class<?> vmGenClass = diffUpdateMethodResolved.getParameterTypes()[0];
 
+            // IG 385811006 keeps the section generators in a Map and the diff update applies them one
+            // by one through a static applier(collector, generator, state, capabilities) -> boolean:
+            // its parameters give the inbox state class and the generators' base class (which holds
+            // the section enum). Older builds kept them as fields of one holders object (fallback below).
+            Class<?> stateClass = null, genBase = null;
+            Field sectionEnumField = null;
+            for (MethodData inv : diffUpdates.get(0).getInvokes()) {
+                if (!"boolean".equals(inv.getReturnTypeName()) || inv.getParamTypeNames().size() != 4) continue;
+                try {
+                    Method m = inv.getMethodInstance(loader);
+                    if (!Modifier.isStatic(m.getModifiers())) continue;
+                    Field ef = sectionEnumFieldOf(m.getParameterTypes()[1]);
+                    if (ef == null) continue;
+                    genBase = m.getParameterTypes()[1];
+                    sectionEnumField = ef;
+                    stateClass = m.getParameterTypes()[2];
+                    sectionField = ef;
+                    break;
+                } catch (Throwable ignored) {}
+            }
+
             Field vmStateField = null;
             for (Field f : vmGenClass.getDeclaredFields()) {
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 if (!f.getType().getName().startsWith("X.")) continue;
+                if (stateClass != null) {
+                    if (f.getType() == stateClass) { vmStateField = f; break; }
+                    continue;
+                }
 
                 int listCount = 0;
                 for (Field sf : f.getType().getDeclaredFields()) {
@@ -147,21 +173,26 @@ public class InboxFoldersHook {
             }
 
             Field holdersField = null;
-            for (Field f : vmGenClass.getDeclaredFields()) {
-                if (Modifier.isStatic(f.getModifiers())) continue;
-                if (!f.getType().getName().startsWith("X.")) continue;
+            if (genBase == null) {
+                for (Field f : vmGenClass.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers())) continue;
+                    if (!f.getType().getName().startsWith("X.")) continue;
 
-                if (f.getType().getDeclaredFields().length >= 20) {
-                    holdersField = f;
-                    break;
+                    if (f.getType().getDeclaredFields().length >= 20) {
+                        holdersField = f;
+                        break;
+                    }
                 }
             }
 
-            if (vmStateField == null || holdersField == null) return;
+            diag("(IE|InboxFolders) vm " + vmGenClass.getName() + " state=" + (vmStateField != null ? vmStateField.getType().getName() : "?")
+                    + " generators=" + (genBase != null ? genBase.getName() : holdersField != null ? "holders " + holdersField.getType().getName() : "?"));
+            if (vmStateField == null || (genBase == null && holdersField == null)) return;
             vmStateField.setAccessible(true);
-            holdersField.setAccessible(true);
-            Class<?> stateClass = vmStateField.getType();
-            Class<?> holdersClass = holdersField.getType();
+            if (holdersField != null) holdersField.setAccessible(true);
+            if (stateClass == null) stateClass = vmStateField.getType();
+            final Class<?> finalStateClass = stateClass;
+            Class<?> holdersClass = holdersField != null ? holdersField.getType() : null;
 
             for (Method m : vmGenClass.getDeclaredMethods()) {
                 if (Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 1 && m.getParameterTypes()[0] == vmGenClass && m.getReturnType() == void.class) {
@@ -176,7 +207,7 @@ public class InboxFoldersHook {
 
                                 if (FeatureFlags.emptyGeneralFolder && isStateInGeneralFolder(state)) {
                                     Map<Field, Object> backup = new HashMap<>();
-                                    for (Field f : stateClass.getDeclaredFields()) {
+                                    for (Field f : finalStateClass.getDeclaredFields()) {
                                         if (f.getType() == java.util.List.class && !Modifier.isStatic(f.getModifiers())) {
                                             f.setAccessible(true);
                                             backup.put(f, f.get(state));
@@ -206,10 +237,36 @@ public class InboxFoldersHook {
                 }
             }
 
-            Field sectionEnumField = null;
             Method singleItemGenMethod = null;
 
-            for (Field f : holdersClass.getDeclaredFields()) {
+            if (genBase != null) {
+                // The single-item generators share one item method taking the state (a final
+                // dispatcher on IG 385811006), declared in a direct subclass of the base.
+                for (ClassData cd : bridge.findClass(FindClass.create()
+                        .matcher(ClassMatcher.create().superClass(genBase.getName())))) {
+                    Class<?> c;
+                    try { c = cd.getInstance(loader); } catch (Throwable t) { continue; }
+                    for (Method sm : c.getDeclaredMethods()) {
+                        int mod = sm.getModifiers();
+                        if (Modifier.isStatic(mod) || Modifier.isAbstract(mod) || sm.getParameterCount() != 1
+                                || sm.getParameterTypes()[0] != stateClass || sm.getReturnType() == void.class
+                                || java.util.Collection.class.isAssignableFrom(sm.getReturnType())) continue;
+                        singleItemGenMethod = sm;
+                        singleItemGenMethod.setAccessible(true);
+                        break;
+                    }
+                    if (singleItemGenMethod != null) break;
+                }
+                // Every generator, by section: INBOX_HEADER's is needed even when its section isn't drawn.
+                XposedBridge.hookAllConstructors(genBase, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        String n = sectionName(param.thisObject);
+                        if (n != null) GENERATORS.put(n, new WeakReference<>(param.thisObject));
+                    }
+                });
+            }
+
+            for (Field f : holdersClass != null ? holdersClass.getDeclaredFields() : new Field[0]) {
                 if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive() || !f.getType().getName().startsWith("X.")) continue;
 
                 Class<?> genType = f.getType();
@@ -237,85 +294,540 @@ public class InboxFoldersHook {
             }
 
             if (sectionEnumField != null && singleItemGenMethod != null) {
-                final Field finalSectionEnumField = sectionEnumField;
+                sectionField = sectionEnumField;
+                holdersFieldRef = holdersField;
+                itemReturnType = singleItemGenMethod.getReturnType();
+                // The section holders (one generator per inbox section, INBOX_HEADER among them):
+                // remembered at construction, since on IG 385713116 the view-model generator
+                // methods above never run, so they can't be read through it.
+                if (holdersClass != null) XposedBridge.hookAllConstructors(holdersClass, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.thisObject != null) holdersRef = new WeakReference<>(param.thisObject);
+                    }
+                });
                 XposedBridge.hookMethod(singleItemGenMethod, new XC_MethodHook() {
                     @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    protected void afterHookedMethod(MethodHookParam param) {
                         if (!FeatureFlags.hideDirectFoldersBar) return;
-                        Object gen = param.thisObject;
-                        Enum<?> secEnum = (Enum<?>) finalSectionEnumField.get(gen);
-                        if (secEnum == null) return;
-
-                        String secName = secEnum.name();
-                        if ("FOLDER".equals(secName) || "FILTER_ROW".equals(secName)) {
-                            param.setResult(null);
-                        } else if ("INBOX_HEADER".equals(secName) && param.getResult() == null) {
-                            Field headerItemField = null;
-                            Field userSessionField = null;
-                            for (Field f : gen.getClass().getDeclaredFields()) {
-                                if (f.getType().getName().endsWith(".UserSession")) userSessionField = f;
-                                else if (f.getType().getName().startsWith("X.")) headerItemField = f;
-                            }
-
-                            if (headerItemField != null) {
-                                headerItemField.setAccessible(true);
-                                Object existingHeader = headerItemField.get(gen);
-                                if (existingHeader == null) {
-                                    Object state = param.args[0];
-                                    Object c0iafInstance = null;
-                                    for (Field sf : state.getClass().getDeclaredFields()) {
-                                        if (sf.getType().isEnum() && sf.getType().getName().startsWith("X.")) {
-                                            sf.setAccessible(true);
-                                            c0iafInstance = sf.get(state);
-                                            break;
-                                        }
-                                    }
-                                    if (c0iafInstance == null) {
-                                        Class<?> enumClass = null;
-                                        for (Constructor<?> constructor : headerItemField.getType().getDeclaredConstructors()) {
-                                            for (Class<?> pType : constructor.getParameterTypes()) {
-                                                if (pType.isEnum()) { enumClass = pType; break; }
-                                            }
-                                        }
-                                        if (enumClass != null) c0iafInstance = enumClass.getEnumConstants()[0];
-                                    }
-
-                                    if (c0iafInstance != null) {
-                                        Class<?> headerClass = headerItemField.getType();
-                                        Constructor<?> headerConstructor = null;
-                                        for (Constructor<?> c : headerClass.getDeclaredConstructors()) {
-                                            if (c.getParameterCount() == 5) {
-                                                headerConstructor = c;
-                                                break;
-                                            }
-                                        }
-                                        if (headerConstructor != null) {
-                                            headerConstructor.setAccessible(true);
-                                            Context context = null;
-                                            try {
-                                                Class<?> appThreadClass = Class.forName("android.app.ActivityThread");
-                                                Method currentAppThreadMethod = appThreadClass.getDeclaredMethod("currentApplication");
-                                                context = (Context) currentAppThreadMethod.invoke(null);
-                                            } catch (Throwable ignored) {}
-                                            String msgTitle = context != null ? context.getString(context.getResources().getIdentifier("direct_header_title", "string", context.getPackageName())) : "Messages";
-                                            if (msgTitle == null || msgTitle.isEmpty()) msgTitle = "Messages";
-                                            String reqTitle = context != null ? context.getString(context.getResources().getIdentifier("direct_message_requests", "string", context.getPackageName())) : "Requests";
-                                            if (reqTitle == null || reqTitle.isEmpty()) reqTitle = "Requests";
-
-                                            Object newHeader = headerConstructor.newInstance(c0iafInstance, msgTitle, reqTitle, 0, true);
-                                            headerItemField.set(gen, newHeader);
-                                            param.setResult(newHeader);
-                                        }
-                                    }
-                                }
-                            }
+                        try {
+                            onSectionItem(param);
+                        } catch (Throwable t) {
+                            // Never leave the folder bar half-built: drop it, as the plain hide did.
+                            String sec = sectionName(param.thisObject);
+                            if ("FOLDER".equals(sec) || "FILTER_ROW".equals(sec)) param.setResult(null);
+                            if (!probeLogged) { probeLogged = true; diag("(IE|InboxFolders) header swap failed: " + t); }
                         }
                     }
                 });
+                diag("(IE|InboxFolders) section generators hooked: " + singleItemGenMethod.getDeclaringClass().getName()
+                        + "#" + singleItemGenMethod.getName());
+            } else {
+                diag("(IE|InboxFolders) section generators NOT hooked: enum=" + (sectionEnumField != null)
+                        + " itemMethod=" + (singleItemGenMethod != null));
             }
 
         } catch (Throwable t) {
             ModuleLog.line("(IE|InboxFolders) Error in VM generator hooks: " + t.getMessage());
         }
+    }
+
+    // ── Hide folders bar: draw the header the way a personal account does ──
+    // Instagram's Compose header (InboxHeader.kt) has three looks for the header item: filtering,
+    // "MRSortHeader" ("Most recent ⌄" + "Hidden requests") and the default "Messages … Requests".
+    // MRSortHeader is picked by a static gate(UserSession, boolean) that is true only for accounts
+    // with inbox folders (professional) in an experiment (X.08cv.A0F on IG 385811006). The default
+    // header's Requests tap opens the requests folder on any account. So while the header item that
+    // replaces the bar is drawn, that gate answers false; other screens using the header keep theirs.
+
+    private static final ThreadLocal<java.util.ArrayDeque<Boolean>> DRAWING_OUR_HEADER =
+            ThreadLocal.withInitial(java.util.ArrayDeque::new);
+    private static final ThreadLocal<java.util.ArrayDeque<Boolean>> IN_HEADER_ENTRY =
+            ThreadLocal.withInitial(java.util.ArrayDeque::new);
+    /** The item Instagram's UI re-created from ours (it rebuilds it with its own label and count). */
+    private static volatile WeakReference<Object> drawnHeaderRef = new WeakReference<>(null);
+    private static volatile boolean gateLogged;
+
+    private void installHeaderStyleHooks(DexKitBridge bridge, ClassLoader loader) {
+        try {
+            List<MethodData> found = bridge.findMethod(FindMethod.create()
+                    .matcher(MethodMatcher.create().usingStrings("inboxheader.ui.InboxHeader (InboxHeader.kt:")));
+            // The chooser takes the item plus the header callbacks; the entry takes the item and the
+            // callbacks holder, re-creates the item and calls the chooser.
+            MethodData chooser = null;
+            for (MethodData md : found) {
+                int fns = 0;
+                for (String p : md.getParamTypeNames()) if ("kotlin.jvm.functions.Function0".equals(p)) fns++;
+                if (fns >= 3) { chooser = md; break; }
+            }
+            if (chooser == null) { diag("(IE|InboxFolders) header chooser not found (" + found.size() + " candidates)"); return; }
+            Method chooserMethod = chooser.getMethodInstance(loader);
+            Class<?> headerType = null;
+            int headerArg = -1;
+            Class<?>[] cp = chooserMethod.getParameterTypes();
+            for (int i = 0; i < cp.length; i++) {
+                if (cp[i].getName().startsWith("X.") && headerConstructor(cp[i]) != null) { headerType = cp[i]; headerArg = i; break; }
+            }
+            if (headerType == null) { diag("(IE|InboxFolders) header chooser has no header item parameter"); return; }
+
+            List<Method> gates = new ArrayList<>();
+            for (MethodData inv : chooser.getInvokes()) {
+                List<String> p = inv.getParamTypeNames();
+                if (!Modifier.isStatic(inv.getModifiers()) || !"boolean".equals(inv.getReturnTypeName()) || p.size() != 2
+                        || !"com.instagram.common.session.UserSession".equals(p.get(0)) || !"boolean".equals(p.get(1))) continue;
+                gates.add(inv.getMethodInstance(loader));
+            }
+            if (gates.isEmpty()) { diag("(IE|InboxFolders) header style gate not found"); return; }
+
+            final Class<?> itemType = headerType;
+            for (MethodData md : found) {
+                if (md == chooser || !md.getParamTypeNames().contains(itemType.getName())) continue;
+                XposedBridge.hookMethod(md.getMethodInstance(loader), new XC_MethodHook() {
+                    @Override protected void beforeHookedMethod(MethodHookParam param) {
+                        Object ours = builtHeader;
+                        boolean mine = false;
+                        if (ours != null && param.args != null) for (Object a : param.args) if (a == ours) { mine = true; break; }
+                        IN_HEADER_ENTRY.get().push(mine);
+                    }
+
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        java.util.ArrayDeque<Boolean> s = IN_HEADER_ENTRY.get();
+                        if (!s.isEmpty()) s.pop();
+                    }
+                });
+            }
+            XposedBridge.hookAllConstructors(itemType, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (Boolean.TRUE.equals(IN_HEADER_ENTRY.get().peek()) && !BUILDING.get()) drawnHeaderRef = new WeakReference<>(param.thisObject);
+                }
+            });
+            final int itemArg = headerArg;
+            XposedBridge.hookMethod(chooserMethod, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    Object item = param.args[itemArg];
+                    boolean ours = FeatureFlags.hideDirectFoldersBar && item != null
+                            && (item == drawnHeaderRef.get() || item == builtHeader);
+                    DRAWING_OUR_HEADER.get().push(ours);
+                }
+
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    java.util.ArrayDeque<Boolean> s = DRAWING_OUR_HEADER.get();
+                    if (!s.isEmpty()) s.pop();
+                }
+            });
+            for (Method gate : gates) {
+                XposedBridge.hookMethod(gate, new XC_MethodHook() {
+                    @Override protected void beforeHookedMethod(MethodHookParam param) {
+                        Boolean ours = DRAWING_OUR_HEADER.get().peek();
+                        if (ours == null || !ours) return;
+                        param.setResult(false);
+                        if (!gateLogged) { gateLogged = true; diag("(IE|InboxFolders) header drawn as default (Messages / Requests)"); }
+                    }
+                });
+            }
+            diag("(IE|InboxFolders) header style hooked: " + chooserMethod.getDeclaringClass().getName() + "#"
+                    + chooserMethod.getName() + " gates=" + gates.size());
+        } catch (Throwable t) {
+            diag("(IE|InboxFolders) header style hook failed: " + t);
+        }
+    }
+
+    // ── Hide folders bar: show Instagram's own "Messages / Requests" header instead ──
+    // A personal account gets the INBOX_HEADER section ("Messages" + "Requests"); a professional
+    // one gets the folder tabs (Primary / General / Requests: the FILTER_ROW section on IG
+    // 385713116, FOLDER on older builds) and no header. With the bar hidden we build that header
+    // item and put it where the bar was, so the inbox looks like a personal account's and Requests
+    // stays one tap away (Instagram's binder handles the tap).
+    // The item is X.08Yp(sort mode, "Messages", folder key, count, flag) on IG 385713116.
+
+    private static Field sectionField;
+    private static Field holdersFieldRef;
+    private static Class<?> itemReturnType;
+    private static volatile WeakReference<Object> holdersRef = new WeakReference<>(null);
+    /** Instagram generates its own header section on this account (personal account): use that slot. */
+    private static volatile boolean headerSectionSeen;
+    /** The first bar section seen (FOLDER or FILTER_ROW, depending on the IG build): the header
+     *  goes only there, so a build generating both never shows it twice. */
+    private static volatile String barSlot;
+    private static volatile Constructor<?> headerCtor;
+    private static volatile boolean probeLogged, ctorLogged, dumpLogged;
+
+    /** One-time log of the shapes involved, so a header that doesn't show can be fixed from a user log. */
+    private static void dump(String barSection, Object headerGen, Object folderItem) {
+        try {
+            StringBuilder sb = new StringBuilder("(IE|InboxFolders) DUMP bar=").append(barSection).append(" slot=")
+                    .append(itemReturnType != null ? itemReturnType.getName() : "?")
+                    .append(" folderItem=").append(folderItem != null ? folderItem.getClass().getName() : "null");
+            Object holders = holders();
+            if (holders != null) {
+                sb.append(" sections=[");
+                for (Field f : holders.getClass().getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+                    f.setAccessible(true);
+                    String n = sectionName(f.get(holders));
+                    if (n != null) sb.append(n).append(' ');
+                }
+                sb.append(']');
+            }
+            if (!GENERATORS.isEmpty()) sb.append(" generators=").append(GENERATORS.keySet());
+            diag(sb.toString());
+            if (headerGen == null) { diag("(IE|InboxFolders) DUMP no INBOX_HEADER generator (holders " + (holders != null ? "found" : "missing")
+                    + ", generators " + GENERATORS.size() + ")"); return; }
+            for (Class<?> c = headerGen.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                StringBuilder g = new StringBuilder("(IE|InboxFolders) DUMP headerGen ").append(c.getName()).append(" fields:");
+                for (Field f : c.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers())) continue;
+                    g.append(' ').append(f.getName()).append(':').append(f.getType().getName());
+                }
+                g.append(" methods:");
+                for (Method m : c.getDeclaredMethods()) {
+                    if (Modifier.isStatic(m.getModifiers())) continue;
+                    g.append(' ').append(m.getName()).append(java.util.Arrays.toString(m.getParameterTypes()))
+                            .append("->").append(m.getReturnType().getName());
+                }
+                diag(g.toString());
+                for (Field f : c.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers()) || !f.getType().getName().startsWith("X.")) continue;
+                    for (Constructor<?> k : f.getType().getDeclaredConstructors())
+                        diag("(IE|InboxFolders) DUMP ctor " + f.getType().getName()
+                                + java.util.Arrays.toString(k.getParameterTypes()));
+                }
+            }
+        } catch (Throwable t) {
+            diag("(IE|InboxFolders) DUMP failed: " + t);
+        }
+    }
+
+    private static String sectionName(Object gen) {
+        try {
+            if (gen == null || sectionField == null || !sectionField.getDeclaringClass().isInstance(gen)) return null;
+            Object e = sectionField.get(gen);
+            return e instanceof Enum<?> en ? en.name() : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static void onSectionItem(XC_MethodHook.MethodHookParam param) throws Throwable {
+        String sec = sectionName(param.thisObject);
+        if (sec == null) return;
+        Object state = param.args != null && param.args.length > 0 ? param.args[0] : null;
+        trace(sec, param.getResult(), state);
+        switch (sec) {
+            case "INBOX_HEADER": {
+                headerSectionSeen = true;
+                Object header = param.getResult();
+                if (header == null) header = buildHeader(param.thisObject, state);
+                if (header != null) param.setResult(header);
+                break;
+            }
+            case "FOLDER":
+            case "FILTER_ROW": {
+                if (barSlot == null) barSlot = sec;
+                Object header = null;
+                if (sec.equals(barSlot) && !headerSectionSeen) {
+                    Object headerGen = headerGenerator();
+                    if (!dumpLogged) { dumpLogged = true; dump(sec, headerGen, param.getResult()); }
+                    if (headerGen != null) header = buildHeader(headerGen, state);
+                    // The slot must accept a header item, or Instagram's caller would crash on the cast.
+                    if (header != null && itemReturnType != null && !itemReturnType.isInstance(header)) {
+                        if (!probeLogged) { probeLogged = true; diag("(IE|InboxFolders) header " + header.getClass().getName() + " doesn't fit slot " + itemReturnType.getName()); }
+                        header = null;
+                    }
+                }
+                param.setResult(header); // null = just hide the bar
+                break;
+            }
+            default:
+        }
+    }
+
+    private static Object holders() throws Throwable {
+        Object h = holdersRef.get();
+        if (h != null) return h;
+        Object vmGen = lastVmGeneratorRef.get();
+        return vmGen != null && holdersFieldRef != null ? holdersFieldRef.get(vmGen) : null;
+    }
+
+    /** Section generators by section name, recorded at construction (IG 385811006 layout). */
+    private static final Map<String, WeakReference<Object>> GENERATORS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The section enum field of a generator base class: a non-static field of an X. enum type. */
+    private static Field sectionEnumFieldOf(Class<?> base) {
+        if (base == null || !base.getName().startsWith("X.")) return null;
+        for (Field f : base.getDeclaredFields()) {
+            if (Modifier.isStatic(f.getModifiers()) || !f.getType().isEnum() || !f.getType().getName().startsWith("X.")) continue;
+            f.setAccessible(true);
+            return f;
+        }
+        return null;
+    }
+
+    /** The INBOX_HEADER section generator, from the recorded generators or the section holders. */
+    private static Object headerGenerator() throws Throwable {
+        WeakReference<Object> ref = GENERATORS.get("INBOX_HEADER");
+        Object recorded = ref != null ? ref.get() : null;
+        if (recorded != null) return recorded;
+        Object holders = holders();
+        if (holders == null) return null;
+        for (Field f : holders.getClass().getDeclaredFields()) {
+            if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+            f.setAccessible(true);
+            Object gen = f.get(holders);
+            if ("INBOX_HEADER".equals(sectionName(gen))) return gen;
+        }
+        return null;
+    }
+
+    /** A main-inbox header item of the type the INBOX_HEADER generator uses. */
+    private static Object buildHeader(Object headerGen, Object state) throws Throwable {
+        Field itemField = null;
+        for (Field f : headerGen.getClass().getDeclaredFields()) {
+            if (Modifier.isStatic(f.getModifiers()) || !f.getType().getName().startsWith("X.")) continue;
+            if (headerConstructor(f.getType()) != null) { itemField = f; break; }
+        }
+        if (itemField == null) {
+            if (!probeLogged) { probeLogged = true; diag("(IE|InboxFolders) no header item field with a usable constructor"); }
+            return null;
+        }
+        // Our own item, cached here: the generator's field may hold Instagram's Requests-folder header
+        // (the same generator serves that view), and writing into it would change that view too.
+        Object cached = builtHeader;
+        if (cached != null && cached.getClass() == itemField.getType()) return cached;
+
+        Constructor<?> ctor = headerConstructor(itemField.getType());
+        spyOnInstagramHeaders(ctor);
+        Class<?>[] types = ctor.getParameterTypes();
+        Object[] args = new Object[types.length];
+        // The values Instagram itself passes for a personal account's inbox (seen on IG 385713116:
+        // [DEFAULT, "Messages", "Inbox", 0, false]): title, button label, request count, filtering
+        // flag. The UI re-creates the item with its own translated "Requests" label and count; which
+        // header it draws is decided there (see installHeaderStyleHooks).
+        String[] keys = {"Messages", "Inbox"};
+        int str = 0;
+        for (int i = 0; i < types.length; i++) {
+            Class<?> t = types[i];
+            if (t == String.class || t == CharSequence.class) args[i] = str < keys.length ? keys[str++] : "";
+            else if (t == int.class || t == Integer.class) args[i] = 0;          // pending request count
+            else if (t == long.class || t == Long.class) args[i] = 0L;
+            else if (t == boolean.class || t == Boolean.class) args[i] = Boolean.FALSE; // neutral: a flag may mean "requests view"
+            else if (t.isEnum()) args[i] = enumFor(t, state);
+        }
+        if (!ctorLogged) {
+            ctorLogged = true;
+            diag("(IE|InboxFolders) header item " + ctor.getDeclaringClass().getName()
+                    + java.util.Arrays.toString(types) + " args=" + java.util.Arrays.toString(args));
+        }
+        Object header;
+        BUILDING.set(Boolean.TRUE);
+        try {
+            header = ctor.newInstance(args);
+        } finally {
+            BUILDING.set(Boolean.FALSE);
+        }
+        builtHeader = header;
+        return header;
+    }
+
+    private static final java.util.Set<String> traced = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    /** What Instagram produced for the header / bar sections, and the inbox state it built them from
+     *  (distinct combinations only): tells the main inbox and the Requests folder apart. */
+    private static final java.util.Set<String> TRACED_SECTIONS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "INBOX_HEADER", "FILTER_ROW", "FOLDER", "HIDDEN_REQUESTS_ROW", "GENERAL_FOLDER_DISABLED"));
+
+    private static void trace(String sec, Object igResult, Object state) {
+        if (traced.size() >= 24 || !TRACED_SECTIONS.contains(sec)) return;
+        String line = "sec=" + sec + " ig=" + describe(igResult, 1) + " state=" + describe(state, 1);
+        if (line.length() > 1500) line = line.substring(0, 1500) + "…";
+        if (traced.add(line)) diag("(IE|InboxFolders) TRACE " + line);
+    }
+
+    /** Class plus its enum / String / number / boolean fields (List sizes, nested IG objects one level). */
+    private static String describe(Object o, int depth) {
+        if (o == null) return "null";
+        if (o instanceof String || o instanceof Number || o instanceof Boolean || o instanceof Enum<?>) return String.valueOf(o);
+        if (o instanceof java.util.Collection<?> c) return "size" + c.size();
+        Class<?> k = o.getClass();
+        if (!k.getName().startsWith("X.") || depth < 0) return k.getName();
+        StringBuilder sb = new StringBuilder(k.getName()).append('{');
+        try {
+            for (Field f : k.getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                f.setAccessible(true);
+                Object v = f.get(o);
+                Class<?> t = f.getType();
+                if (t.isPrimitive() || v instanceof String || v instanceof Enum<?> || v instanceof Number
+                        || v instanceof Boolean || v instanceof java.util.Collection<?>) {
+                    sb.append(f.getName()).append('=').append(describe(v, 0)).append(' ');
+                } else if (v != null && v.getClass().getName().startsWith("X.") && depth > 0) {
+                    sb.append(f.getName()).append('=').append(describe(v, depth - 1)).append(' ');
+                }
+            }
+        } catch (Throwable ignored) {}
+        return sb.append('}').toString();
+    }
+
+    private static final java.util.Set<String> watched = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+    private static final java.util.concurrent.atomic.AtomicInteger watchLines = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** Hooks every method {@code Class#name} (the Instagram step that re-creates the header) and records
+     *  what it receives and returns, a few times, so the input that picks the folder key shows up. */
+    private static void watchMethod(String classAndName) {
+        if (!watched.add(classAndName)) return;
+        try {
+            String[] parts = classAndName.split("#");
+            Class<?> k = Class.forName(parts[0], false, ps.reso.instaeclipse.Xposed.Module.hostClassLoader);
+            int hooked = 0;
+            for (Method m : k.getDeclaredMethods()) {
+                if (!m.getName().equals(parts[1])) continue;
+                XposedBridge.hookMethod(m, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        if (watchLines.incrementAndGet() > 12) return;
+                        StringBuilder sb = new StringBuilder("(IE|InboxFolders) STEP ").append(classAndName)
+                                .append(java.util.Arrays.toString(m.getParameterTypes())).append(" this=")
+                                .append(describe(param.thisObject, 0)).append(" args=[");
+                        if (param.args != null) for (Object a : param.args) sb.append(describe(a, 1)).append(", ");
+                        sb.append("] -> ").append(describe(param.getResult(), 1));
+                        String line = sb.length() > 1500 ? sb.substring(0, 1500) + "…" : sb.toString();
+                        diag(line);
+                    }
+                });
+                hooked++;
+            }
+            diag("(IE|InboxFolders) watching " + classAndName + " x" + hooked);
+        } catch (Throwable t) {
+            diag("(IE|InboxFolders) watch " + classAndName + " failed: " + t);
+        }
+    }
+
+    private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static volatile boolean spyInstalled;
+    private static final java.util.Set<String> spied = java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>());
+
+    /** Records the arguments Instagram itself builds this header with (e.g. in the Requests folder or
+     *  on a personal account), so which argument drives which label can be read from the diagnostics. */
+    private static void spyOnInstagramHeaders(Constructor<?> ctor) {
+        if (spyInstalled) return;
+        spyInstalled = true;
+        try {
+            XposedBridge.hookMethod(ctor, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (BUILDING.get() || spied.size() >= 8) return;
+                    String args = java.util.Arrays.toString(param.args);
+                    if (!spied.add(args)) return;
+                    StringBuilder callers = new StringBuilder();
+                    String first = null;
+                    for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
+                        String c = e.getClassName();
+                        if (!c.startsWith("X.") || c.equals(ctor.getDeclaringClass().getName())) continue;
+                        if (first == null) first = c + "#" + e.getMethodName();
+                        if (callers.length() > 0) callers.append(" < ");
+                        callers.append(c).append('.').append(e.getMethodName());
+                        if (callers.length() > 300) break;
+                    }
+                    diag("(IE|InboxFolders) IG header args=" + args + " from " + callers);
+                    if (first != null) watchMethod(first);
+                }
+            });
+        } catch (Throwable t) {
+            diag("(IE|InboxFolders) header spy failed: " + t);
+        }
+    }
+
+    /** A constructor taking two or more Strings and otherwise only enums / numbers / booleans. */
+    private static Constructor<?> headerConstructor(Class<?> type) {
+        Constructor<?> cached = headerCtor;
+        if (cached != null && cached.getDeclaringClass() == type) return cached;
+        for (Constructor<?> c : type.getDeclaredConstructors()) {
+            int strings = 0;
+            boolean ok = true;
+            for (Class<?> p : c.getParameterTypes()) {
+                if (p == String.class || p == CharSequence.class) strings++;
+                else if (!(p.isEnum() || p == int.class || p == Integer.class || p == long.class || p == Long.class
+                        || p == boolean.class || p == Boolean.class)) { ok = false; break; }
+            }
+            if (ok && strings >= 2) {
+                c.setAccessible(true);
+                headerCtor = c;
+                return c;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The header's mode. The same item draws the main inbox header ("Messages" / "Requests") and
+     * the Requests folder one ("Sort by" / "Hidden requests"); the enum picks which. Prefer a
+     * main-inbox constant by name, never a requests / spam one; the state's own value only when it
+     * isn't one of those, else the first constant that isn't.
+     */
+    static Object enumFor(Class<?> enumType, Object state) {
+        Object[] all = enumType.getEnumConstants();
+        if (all == null || all.length == 0) return null;
+        Object best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (Object c : all) {
+            int score = enumScore(((Enum<?>) c).name());
+            if (score > bestScore) { bestScore = score; best = c; }
+        }
+        Object fromState = null;
+        if (state != null) {
+            for (Field f : state.getClass().getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers()) || f.getType() != enumType) continue;
+                try {
+                    f.setAccessible(true);
+                    fromState = f.get(state);
+                    if (fromState != null) break;
+                } catch (Throwable ignored) {}
+            }
+        }
+        // A main-inbox name wins; with no telling names, the state's value unless it's a requests one.
+        Object chosen = bestScore > 0 ? best
+                : fromState != null && enumScore(((Enum<?>) fromState).name()) >= 0 ? fromState : best;
+        if (!enumLogged) {
+            enumLogged = true;
+            diag("(IE|InboxFolders) header mode " + enumType.getName() + java.util.Arrays.toString(all)
+                    + " state=" + fromState + " chosen=" + chosen);
+        }
+        return chosen;
+    }
+
+    private static volatile boolean enumLogged;
+
+    // Diagnostics kept in memory too, shown with a Copy button in Hide chats > Folders bar
+    // diagnostics: the log viewer is hard to copy these long lines from.
+    private static final StringBuilder DIAG = new StringBuilder();
+    private static final int DIAG_MAX = 30000;
+
+    private static void diag(String line) {
+        ModuleLog.line(line);
+        synchronized (DIAG) {
+            if (DIAG.length() < DIAG_MAX) DIAG.append(line, 0, Math.min(line.length(), DIAG_MAX - DIAG.length())).append('\n');
+        }
+    }
+
+    /** What the folders-bar header swap found on this Instagram build, for the user to copy. */
+    public static String diagnostics() {
+        StringBuilder out = new StringBuilder();
+        out.append("hideDirectFoldersBar=").append(FeatureFlags.hideDirectFoldersBar)
+                .append(" barSlot=").append(barSlot)
+                .append(" headerSectionSeen=").append(headerSectionSeen)
+                .append(" holders=").append(holdersRef.get() != null)
+                .append(" builtHeader=").append(builtHeader != null ? builtHeader.getClass().getName() : "null")
+                .append('\n');
+        synchronized (DIAG) { out.append(DIAG); }
+        return out.toString();
+    }
+    private static volatile Object builtHeader;
+
+    /** > 0: main inbox; < 0: requests / spam / hidden / other folders; 0: can't tell. */
+    static int enumScore(String name) {
+        String n = name.toUpperCase(java.util.Locale.ROOT);
+        if (n.contains("PENDING") || n.contains("REQUEST") || n.contains("SPAM") || n.contains("HIDDEN")
+                || n.contains("FILTER") || n.contains("ARCHIV") || n.contains("GENERAL") || n.contains("BUSINESS")
+                || n.contains("SECONDARY")) return -1;
+        if (n.contains("INBOX") || n.contains("PRIMARY") || n.contains("MESSAGE") || n.contains("MAIN")
+                || n.contains("DEFAULT") || n.equals("ALL") || n.contains("REGULAR") || n.contains("NORMAL")) return 1;
+        return 0;
     }
 }

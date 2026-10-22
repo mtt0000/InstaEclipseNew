@@ -47,6 +47,32 @@ public class DisableDoubleTapLikeBindingTest {
                 Collections.singletonList(invoke(Action.class))));
     }
 
+    interface Function4 { Object invoke(Object a, Object b, Object c, Object d); }
+    interface MergedContract extends Function4 {}
+    static class MergedContractAction implements MergedContract {
+        public Object invoke(Object a, Object b, Object c, Object d) { return null; }
+    }
+    static class ContractHandler { void setLike(MergedContract action) {} }
+    static class GestureListener {
+        public boolean onDoubleTap(android.view.MotionEvent e) { return true; }
+        public boolean onSingleTapUp(android.view.MotionEvent e) { return true; }
+    }
+
+    /** IG 385811006: the dispatcher is inlined into the gesture listener's onDoubleTap(MotionEvent). */
+    @Test public void acceptsInlinedGestureDispatcherCallingAnInheritedInvoke() throws Exception {
+        Method setter = ContractHandler.class.getDeclaredMethod("setLike", MergedContract.class);
+        Method action = invoke(MergedContractAction.class);
+        Method onDoubleTap = GestureListener.class.getDeclaredMethod("onDoubleTap", android.view.MotionEvent.class);
+        assertNotNull(DisableDoubleTapLikeHook.LikeActionBinding.create(setter, onDoubleTap, action,
+                Collections.singletonList(invoke(Function4.class))));
+        assertNull(DisableDoubleTapLikeHook.LikeActionBinding.create(setter, onDoubleTap, action, Collections.emptyList()));
+        assertNull(DisableDoubleTapLikeHook.LikeActionBinding.create(setter,
+                GestureListener.class.getDeclaredMethod("onSingleTapUp", android.view.MotionEvent.class), action,
+                Collections.singletonList(invoke(Function4.class))));
+        assertNull(DisableDoubleTapLikeHook.LikeActionBinding.create(setter, onDoubleTap, action,
+                Collections.singletonList(invoke(WrongAction.class))));
+    }
+
     @Test public void blocksOnlyBoundIdentityInExactDoubleTapDispatcher() throws Exception {
         DisableDoubleTapLikeHook.BoundLikeCallbacks callbacks = new DisableDoubleTapLikeHook.BoundLikeCallbacks(dispatcher());
         Object bound = new MergedAction();

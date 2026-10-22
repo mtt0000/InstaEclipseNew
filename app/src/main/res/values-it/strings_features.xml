@@ -46,4 +46,11 @@
     <string name="ig_batch_hide_action">Nascondi selezionate</string>
     <string name="ig_batch_hide_empty">Nessuna chat da mostrare: apri l\'inbox, attendi che si carichi e riprova.</string>
     <string name="ig_batch_hide_done">%1$d chat nascoste</string>
+
+
+    <!-- Hide folders bar: diagnostics shown in the module menu -->
+    <string name="ig_folders_diag_title">Diagnostica barra cartelle</string>
+    <string name="ig_folders_diag_hint">Attiva Nascondi barra delle cartelle, apri una volta i Direct, poi torna qui e tocca Copia.</string>
+    <string name="ig_folders_diag_copy">Copia</string>
+    <string name="ig_folders_diag_copied">Copiato</string>
 </resources>
