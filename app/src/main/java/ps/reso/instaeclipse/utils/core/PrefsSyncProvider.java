@@ -69,6 +69,9 @@ public class PrefsSyncProvider extends ContentProvider {
                 }
                 e.commit();
             }
+            // A disguise picked in Instagram's menu: only this app may switch its launcher entry.
+            Object disguise = changes.get("appDisguise");
+            if (disguise instanceof String) AppDisguiseManager.applyAliases(ctx, (String) disguise);
         }
         Bundle result = new Bundle();
         result.putInt(RESULT_UPDATED, updated);

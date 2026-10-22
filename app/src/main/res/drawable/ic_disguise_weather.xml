@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon of the "weather" app disguise (layers from Lawnchair's private space disguises). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_disguise_weather_background" />
+    <foreground android:drawable="@drawable/ic_disguise_weather_foreground" />
+    <monochrome android:drawable="@drawable/ic_disguise_weather_monochrome" />
+</adaptive-icon>

@@ -1910,24 +1910,25 @@ public class DialogUtils {
     }
 
     private static void showAppDisguiseDialog(Context context, android.widget.TextView label) {
-        String[] options = {"Default", "Calculator", "Notes", "File Manager", "Calendar", "Weather"};
-        String[] keys = {
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.DEFAULT,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.CALCULATOR,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.NOTES,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.FILE_MANAGER,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.CALENDAR,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.WEATHER
-        };
+        ps.reso.instaeclipse.utils.core.AppDisguiseManager.Option[] all =
+                ps.reso.instaeclipse.utils.core.AppDisguiseManager.Option.values();
+        String[] options = new String[all.length];
+        String[] keys = new String[all.length];
+        for (int i = 0; i < all.length; i++) {
+            options[i] = I18n.t(context, all[i].labelRes);
+            keys[i] = all[i].key;
+        }
         int selected = java.util.Arrays.asList(keys).indexOf(FeatureFlags.appDisguise);
         if (selected == -1) selected = 0;
         new AlertDialog.Builder(context)
                 .setTitle(I18n.t(context, R.string.ig_dialog_app_disguise))
-                .setSingleChoiceItems(options, selected, (d, which) -> {
+                .setSingleChoiceItems(ps.reso.instaeclipse.utils.core.AppDisguiseManager.pickerAdapter(context,
+                        ps.reso.instaeclipse.xposedcompat.ModuleResources.get(context), options), selected, (d, which) -> {
                     String val = keys[which];
+                    // Saved here and pushed to the companion app, which switches its launcher entry.
                     ps.reso.instaeclipse.utils.core.AppDisguiseManager.applyDisguise(context, val);
                     label.setText(I18n.t(context, R.string.ig_dialog_app_disguise) + "  ·  " + options[which]);
-                    android.widget.Toast.makeText(context, "Disguise changed. App restart might be required.", android.widget.Toast.LENGTH_LONG).show();
+                    android.widget.Toast.makeText(context, I18n.t(context, R.string.ig_app_disguise_changed), android.widget.Toast.LENGTH_LONG).show();
                     d.dismiss();
                 }).show();
     }

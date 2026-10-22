@@ -33,6 +33,7 @@
     <string name="app_name_file_manager">File Manager</string>
     <string name="app_name_calendar">Calendario</string>
     <string name="app_name_weather">Meteo</string>
+    <string name="ig_app_disguise_changed">Icona e nome cambiati: il launcher potrebbe impiegare qualche istante ad aggiornarli.</string>
 
     <!-- Navigation > Nav bar shortcuts -->
     <string name="menu_nav_shortcuts">Scorciatoie barra di navigazione</string>

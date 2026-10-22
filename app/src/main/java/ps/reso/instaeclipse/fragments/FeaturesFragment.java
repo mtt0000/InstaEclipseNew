@@ -1454,31 +1454,31 @@ public class FeaturesFragment extends Fragment {
                 + (d.isEmpty() ? getString(R.string.ig_dialog_extras_share_domain_off) : d);
     }
 
-    /** Custom share domain (saved as the "customShareDomain" string pref). */
+    /** App disguise: the launcher icon and name this app shows (saved as the "appDisguise" string pref). */
     private void showAppDisguiseDialog(android.view.View trigger) {
-        String[] options = {"Default", "Calculator", "Notes", "File Manager", "Calendar", "Weather"};
-        String[] keys = {
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.DEFAULT,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.CALCULATOR,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.NOTES,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.FILE_MANAGER,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.CALENDAR,
-            ps.reso.instaeclipse.utils.core.AppDisguiseManager.WEATHER
-        };
+        ps.reso.instaeclipse.utils.core.AppDisguiseManager.Option[] all =
+                ps.reso.instaeclipse.utils.core.AppDisguiseManager.Option.values();
+        String[] options = new String[all.length];
+        String[] keys = new String[all.length];
+        for (int i = 0; i < all.length; i++) {
+            options[i] = getString(all[i].labelRes);
+            keys[i] = all[i].key;
+        }
         String current = localCache.getString("appDisguise", ps.reso.instaeclipse.utils.core.AppDisguiseManager.DEFAULT);
         int selected = java.util.Arrays.asList(keys).indexOf(current);
         if (selected == -1) selected = 0;
 
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.ig_dialog_app_disguise)
-                .setSingleChoiceItems(options, selected, (d, which) -> {
+                .setSingleChoiceItems(ps.reso.instaeclipse.utils.core.AppDisguiseManager.pickerAdapter(
+                        requireContext(), getResources(), options), selected, (d, which) -> {
                     String val = keys[which];
                     localCache.edit().putString("appDisguise", val).apply();
                     ps.reso.instaeclipse.utils.core.AppDisguiseManager.applyDisguise(requireContext(), val);
                     if (trigger instanceof android.widget.TextView) {
                         ((android.widget.TextView) trigger).setText(getString(R.string.ig_dialog_app_disguise) + "  ·  " + options[which]);
                     }
-                    android.widget.Toast.makeText(requireContext(), "Disguise changed. Restarting app may be required.", android.widget.Toast.LENGTH_LONG).show();
+                    android.widget.Toast.makeText(requireContext(), R.string.ig_app_disguise_changed, android.widget.Toast.LENGTH_LONG).show();
                     d.dismiss();
                     try { java.lang.reflect.Method m = getClass().getDeclaredMethod("syncToModule"); m.setAccessible(true); m.invoke(this); } catch (Exception ignored) {}
                 }).show();
