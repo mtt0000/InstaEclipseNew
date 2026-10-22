@@ -157,6 +157,18 @@ public class SettingsBackupManager {
 
         JSONObject root = new JSONObject();
         root.put("version",  VERSION);
+        // Hide Specific Chats (the hidden chat list itself lives in Instagram's own files)
+        s.put("hideSpecificChats",             FeatureFlags.hideSpecificChats);
+        s.put("showHideChatButton",            FeatureFlags.showHideChatButton);
+        s.put("enableBatchHideChats",          FeatureFlags.enableBatchHideChats);
+        s.put("hideChatBackLongPress",         FeatureFlags.hideChatBackLongPress);
+        s.put("hideChatsBackLongPressSeconds", FeatureFlags.hideChatsBackLongPressSeconds);
+        s.put("emptyGeneralFolder",            FeatureFlags.emptyGeneralFolder);
+        s.put("hideDirectFoldersBar",          FeatureFlags.hideDirectFoldersBar);
+        s.put("quickToggleHideChats",          FeatureFlags.quickToggleHideChats);
+        s.put("quickToggleHideFolderBar",      FeatureFlags.quickToggleHideFolderBar);
+        s.put("quickToggleEmptyGeneral",       FeatureFlags.quickToggleEmptyGeneral);
+
         for (String flag : ps.reso.instaeclipse.utils.feature.ExtrasFeatures.flags())
             s.put(flag, ps.reso.instaeclipse.utils.feature.ExtrasFeatures.get(flag));
         s.put("customShareDomain", FeatureFlags.customShareDomain);
@@ -218,6 +230,12 @@ public class SettingsBackupManager {
         if (s.has("quickToggleEphemeral"))   FeatureFlags.quickToggleEphemeral   = s.getBoolean("quickToggleEphemeral");
         if (s.has("quickTogglePermanentView")) FeatureFlags.quickTogglePermanentView = s.getBoolean("quickTogglePermanentView");
         if (s.has("quickToggleAllowScreenshots")) FeatureFlags.quickToggleAllowScreenshots = s.getBoolean("quickToggleAllowScreenshots");
+        if (s.has("hideSpecificChats"))         FeatureFlags.hideSpecificChats         = s.getBoolean("hideSpecificChats");
+        if (s.has("showHideChatButton"))        FeatureFlags.showHideChatButton        = s.getBoolean("showHideChatButton");
+        if (s.has("enableBatchHideChats"))      FeatureFlags.enableBatchHideChats      = s.getBoolean("enableBatchHideChats");
+        if (s.has("quickToggleHideChats"))      FeatureFlags.quickToggleHideChats      = s.getBoolean("quickToggleHideChats");
+        if (s.has("quickToggleHideFolderBar"))  FeatureFlags.quickToggleHideFolderBar  = s.getBoolean("quickToggleHideFolderBar");
+        if (s.has("quickToggleEmptyGeneral"))   FeatureFlags.quickToggleEmptyGeneral   = s.getBoolean("quickToggleEmptyGeneral");
         if (s.has("hideChatBackLongPress"))     FeatureFlags.hideChatBackLongPress     = s.getBoolean("hideChatBackLongPress");
         if (s.has("hideChatsBackLongPressSeconds")) FeatureFlags.hideChatsBackLongPressSeconds = s.getInt("hideChatsBackLongPressSeconds");
         if (s.has("emptyGeneralFolder"))        FeatureFlags.emptyGeneralFolder        = s.getBoolean("emptyGeneralFolder");

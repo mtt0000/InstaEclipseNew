@@ -1,208 +1,302 @@
 package ps.reso.instaeclipse.mods.ghost;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.res.Configuration;
 import android.graphics.Color;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewTreeObserver;
-import android.widget.CompoundButton;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentActivity;
-
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import ps.reso.instaeclipse.R;
+import ps.reso.instaeclipse.mods.ui.utils.CleanUiManager;
 import ps.reso.instaeclipse.utils.dialog.DialogUtils;
+import ps.reso.instaeclipse.utils.dialog.IeDialog;
 import ps.reso.instaeclipse.utils.feature.FeatureFlags;
 import ps.reso.instaeclipse.utils.ghost.CurrentConversation;
+import ps.reso.instaeclipse.utils.ghost.HiddenThreadStore;
 import ps.reso.instaeclipse.utils.ghost.HiddenThreads;
 import ps.reso.instaeclipse.utils.i18n.I18n;
+import ps.reso.instaeclipse.utils.log.ModuleLog;
+import ps.reso.instaeclipse.utils.toast.IeToast;
 
-public class BatchHideChatsHook implements ViewTreeObserver.OnGlobalLayoutListener {
+/**
+ * Batch hide (Hide Specific Chats): a button in the DM inbox header opens a list of the chats the
+ * inbox has loaded, with a check box each; the ticked ones are hidden in one go.
+ *
+ * <p>The old version waited for Instagram's own multi-select bar, found by the English labels
+ * "Mute" / "Delete", and guessed the selection by scanning fragments on every layout: with
+ * Instagram in another language (or a Compose bar) the button never appeared. Now:
+ * <ul>
+ *   <li>the button sits in {@code direct_inbox_action_bar}, the inbox header Lock DMs already
+ *   detects the inbox by;</li>
+ *   <li>the chats come from the inbox rows {@link HiddenInboxFilter} sees (the same thread ids it
+ *   filters on), recorded per account before filtering;</li>
+ *   <li>each chat is named by the row text shown in the inbox when it is on screen, else by the
+ *   row model's most name-like string.</li>
+ * </ul>
+ * Hidden by Clean UI (not added while it is on, tracked so an existing one goes at once).
+ */
+public final class BatchHideChatsHook {
 
     private static final String BTN_TAG = "ie_batch_hide_btn";
-    private static final WeakHashMap<Activity, BatchHideChatsHook> instances = new WeakHashMap<>();
+    private static final String TAG = "(IE|BatchHide) ";
+    private static final int MAX_LISTS = 6;   // recent inbox lists per account (one per folder)
 
-    private final Activity activity;
-    private boolean attached = false;
+    /** account -> recent unfiltered inbox row lists, newest first */
+    private static final Map<String, Deque<List<?>>> recentRows = new ConcurrentHashMap<>();
+    private static volatile String lastAccount;
 
-    public static void attach(Activity a, View root) {
-        if (!FeatureFlags.hideSpecificChats || !FeatureFlags.enableBatchHideChats) return;
-        BatchHideChatsHook hook = instances.get(a);
-        if (hook == null) {
-            hook = new BatchHideChatsHook(a);
-            instances.put(a, hook);
+    private static final Set<View> watchedDecors =
+            Collections.newSetFromMap(new WeakHashMap<>());
+    private static int actionBarId, threadHeaderId, threadListId;
+
+    private BatchHideChatsHook() {}
+
+    // ── data: the inbox rows, from HiddenInboxFilter ──
+
+    /** Called with each inbox list the store builds, before hidden chats are filtered out. */
+    static void recordInbox(Object store, List<?> rows) {
+        if (!FeatureFlags.hideSpecificChats || !FeatureFlags.enableBatchHideChats || rows == null || rows.isEmpty()) return;
+        String account = CurrentConversation.accountIdOf(store);
+        if (account == null) return;
+        Deque<List<?>> lists = recentRows.computeIfAbsent(account, k -> new ArrayDeque<>());
+        synchronized (lists) {
+            lists.addFirst(new ArrayList<>(rows));
+            while (lists.size() > MAX_LISTS) lists.removeLast();
         }
-        if (!hook.attached && root != null) {
-            root.getViewTreeObserver().addOnGlobalLayoutListener(hook);
-            hook.attached = true;
+        lastAccount = account;
+    }
+
+    // ── the inbox header button ──
+
+    /** Arms the button for {@code a}'s window; safe to call on every resume. */
+    public static void attach(Activity a, View ignoredRoot) {
+        if (a == null) return;
+        try {
+            ensureIds(a);
+            View decor = a.getWindow().getDecorView();
+            if (!watchedDecors.add(decor)) { update(a); return; }
+            // The inbox is a tab of the main activity: it appears without an activity resume.
+            decor.getViewTreeObserver().addOnGlobalLayoutListener(() -> update(a));
+            update(a);
+        } catch (Throwable t) {
+            ModuleLog.line(TAG + "attach: " + t);
         }
     }
 
-    private BatchHideChatsHook(Activity activity) {
-        this.activity = activity;
+    @SuppressLint("DiscouragedApi")
+    private static void ensureIds(Activity a) {
+        if (actionBarId != 0) return;
+        String pkg = a.getPackageName();
+        actionBarId = a.getResources().getIdentifier("direct_inbox_action_bar", "id", pkg);
+        threadHeaderId = a.getResources().getIdentifier("direct_thread_header", "id", pkg);
+        threadListId = a.getResources().getIdentifier("inbox_refreshable_thread_list_recyclerview", "id", pkg);
     }
 
-    @Override
-    public void onGlobalLayout() {
-        if (activity.isDestroyed() || activity.isFinishing()) return;
-        View root = activity.findViewById(android.R.id.content);
-        if (root == null) return;
-
-        List<String> selectedThreads = resolveSelectedThreadIds(activity);
-        boolean isMultiSelectActive = !selectedThreads.isEmpty();
-
-        View existingBtn = root.findViewWithTag(BTN_TAG);
-
-        if (isMultiSelectActive) {
-            if (existingBtn == null) {
-                injectHideButton(root, selectedThreads);
-            } else {
-                existingBtn.setOnClickListener(v -> hideThreads(selectedThreads));
-            }
-        } else if (existingBtn != null) {
-            if (existingBtn.getParent() instanceof ViewGroup) {
-                ((ViewGroup) existingBtn.getParent()).removeView(existingBtn);
-            }
+    private static void update(Activity a) {
+        if (a.isFinishing() || a.isDestroyed()) return;
+        View decor = a.getWindow().getDecorView();
+        View existing = decor.findViewWithTag(BTN_TAG);
+        boolean wanted = FeatureFlags.hideSpecificChats && FeatureFlags.enableBatchHideChats
+                && !FeatureFlags.isCleanUiActive;
+        View bar = wanted && actionBarId != 0 ? a.findViewById(actionBarId) : null;
+        boolean onInbox = bar instanceof ViewGroup && bar.isShown()
+                && (threadHeaderId == 0 || a.findViewById(threadHeaderId) == null);
+        if (!onInbox) {
+            if (existing != null && existing.getParent() instanceof ViewGroup p) p.removeView(existing);
+            return;
         }
+        if (existing != null) return;
+        addButton(a, (ViewGroup) bar);
     }
 
-    private void injectHideButton(View root, List<String> selectedThreads) {
-        ViewGroup target = findMultiSelectBar(root);
-        if (target == null) return;
+    /** Just left of the header's right-most button (IG's "new message"), sized like it. */
+    private static void addButton(Activity a, ViewGroup bar) {
+        View anchor = rightMostButton(bar);
+        if (anchor == null || anchor.getWidth() == 0) return; // header still laying out: next layout pass
+        if (!(anchor.getParent() instanceof ViewGroup host)) return;
+        boolean night = (a.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES;
+        android.graphics.drawable.Drawable icon =
+                DialogUtils.moduleIcon(R.drawable.ic_eye_off, night ? Color.WHITE : Color.BLACK);
+        if (icon == null) return;
 
-        ImageView btn = new ImageView(activity);
+        ImageView btn = new ImageView(a);
         btn.setTag(BTN_TAG);
-        btn.setImageDrawable(DialogUtils.moduleIcon(R.drawable.ic_eye_off, Color.WHITE));
-        int pad = (int) (12 * activity.getResources().getDisplayMetrics().density);
+        btn.setImageDrawable(icon);
+        btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        int pad = Math.round(10 * a.getResources().getDisplayMetrics().density);
         btn.setPadding(pad, pad, pad, pad);
-        btn.setOnClickListener(v -> hideThreads(selectedThreads));
+        btn.setContentDescription(I18n.t(a, R.string.ig_batch_hide_title));
+        btn.setOnClickListener(v -> showPicker(a));
 
-        target.addView(btn, 0);
-    }
-
-    private ViewGroup findMultiSelectBar(View root) {
-        ArrayList<View> out = new ArrayList<>();
-        root.findViewsWithText(out, "Mute", View.FIND_VIEWS_WITH_TEXT);
-        root.findViewsWithText(out, "Delete", View.FIND_VIEWS_WITH_TEXT);
-        for (View v : out) {
-            if (v.getParent() instanceof LinearLayout) {
-                LinearLayout p = (LinearLayout) v.getParent();
-                if (p.getOrientation() == LinearLayout.HORIZONTAL) {
-                    return p;
-                }
-            }
-        }
-        return null;
-    }
-
-    private void hideThreads(List<String> threadIds) {
-        String acc = CurrentConversation.accountId(activity);
-        for (String id : threadIds) {
-            HiddenThreads.setHidden(acc, id, "Thread " + id, true);
-        }
-        Toast.makeText(activity, "Hidden " + threadIds.size() + " chats", Toast.LENGTH_SHORT).show();
-        activity.onBackPressed();
-        HideChatsHook.refreshActiveInbox(activity);
-    }
-
-    private List<String> resolveSelectedThreadIds(Activity activity) {
-        Set<String> ids = new HashSet<>();
-        if (activity instanceof FragmentActivity) {
-            scanFragmentsForSelectedThreads(((FragmentActivity) activity).getSupportFragmentManager().getFragments(), ids, 0);
-        }
-
-        if (ids.isEmpty()) {
-            View root = activity.findViewById(android.R.id.content);
-            if (root instanceof ViewGroup) {
-                scanViewForSelectedThreads((ViewGroup) root, ids);
-            }
-        }
-
-        return new ArrayList<>(ids);
-    }
-
-    private void scanFragmentsForSelectedThreads(List<Fragment> fragments, Set<String> out, int depth) {
-        if (depth > 5 || fragments == null) return;
-        for (Fragment f : fragments) {
-            if (f == null || f.getView() == null || !f.getUserVisibleHint()) continue;
-            String name = f.getClass().getName();
-            if (!name.startsWith("X.") && !name.startsWith("com.instagram.")) continue;
-
-            scanObjectForThreadKeys(f, out, new HashSet<>(), 0);
-            scanFragmentsForSelectedThreads(f.getChildFragmentManager().getFragments(), out, depth + 1);
-        }
-    }
-
-    private void scanObjectForThreadKeys(Object obj, Set<String> out, Set<Object> seen, int depth) {
-        if (depth > 2 || obj == null || !seen.add(obj)) return;
-
-        if (obj instanceof Set) {
-            for (Object item : (Set<?>) obj) extractThreadIdFrom(item, out);
-        } else if (obj instanceof Map) {
-            for (Object item : ((Map<?, ?>) obj).keySet()) extractThreadIdFrom(item, out);
-            for (Object item : ((Map<?, ?>) obj).values()) extractThreadIdFrom(item, out);
+        int size = Math.max(anchor.getWidth(), anchor.getHeight());
+        ViewGroup.LayoutParams lp;
+        if (host instanceof LinearLayout) {
+            LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(size, size);
+            llp.gravity = Gravity.CENTER_VERTICAL;
+            lp = llp;
         } else {
-            Class<?> c = obj.getClass();
-            if (!c.getName().startsWith("X.") && !c.getName().startsWith("com.instagram.")) return;
-            for (Field field : c.getDeclaredFields()) {
-                if (field.getType() == Set.class || field.getType() == Map.class) {
-                    try {
-                        field.setAccessible(true);
-                        scanObjectForThreadKeys(field.get(obj), out, seen, depth + 1);
-                    } catch (Exception ignored) {}
+            try {
+                lp = anchor.getLayoutParams().getClass().getConstructor(anchor.getLayoutParams().getClass())
+                        .newInstance(anchor.getLayoutParams());
+                lp.width = size;
+                lp.height = size;
+            } catch (Throwable t) {
+                lp = new ViewGroup.LayoutParams(size, size);
+            }
+        }
+        host.addView(btn, host.indexOfChild(anchor), lp);
+        // A right-aligned anchor in a FrameLayout-like host: put ours just left of it.
+        if (!(host instanceof LinearLayout)) btn.setTranslationX(-size);
+        CleanUiManager.trackInjectedView(btn);
+        ModuleLog.line(TAG + "✅ button added in " + host.getClass().getSimpleName());
+    }
+
+    private static View rightMostButton(ViewGroup bar) {
+        View best = null;
+        int bestRight = Integer.MIN_VALUE;
+        int[] loc = new int[2];
+        ArrayDeque<View> stack = new ArrayDeque<>();
+        stack.push(bar);
+        while (!stack.isEmpty()) {
+            View v = stack.pop();
+            if (v != bar && v.isClickable() && v.isShown() && v.getWidth() > 0 && !BTN_TAG.equals(v.getTag())) {
+                v.getLocationOnScreen(loc);
+                int right = loc[0] + v.getWidth();
+                if (right > bestRight) { bestRight = right; best = v; }
+                continue; // a clickable group is one button
+            }
+            if (v instanceof ViewGroup g) for (int i = 0; i < g.getChildCount(); i++) stack.push(g.getChildAt(i));
+        }
+        if (best == null) return null;
+        bar.getLocationOnScreen(loc);
+        // Only a button on the right half: the left side holds the account switcher / title.
+        return bestRight > loc[0] + bar.getWidth() / 2 ? best : null;
+    }
+
+    // ── the picker ──
+
+    private static void showPicker(Activity a) {
+        String account = CurrentConversation.accountId(a);
+        if (account == null || !recentRows.containsKey(account)) account = lastAccount;
+        if (account == null) { toast(a, I18n.t(a, R.string.ig_hide_chat_no_thread)); return; }
+
+        Set<String> onScreen = visibleTexts(a);
+        LinkedHashMap<String, String> chats = new LinkedHashMap<>(); // id -> title
+        Deque<List<?>> lists = recentRows.get(account);
+        if (lists != null) {
+            synchronized (lists) {
+                for (List<?> list : lists) for (Object row : list) {
+                    String id = HiddenInboxFilter.threadIdOfRow(row);
+                    if (id == null || chats.containsKey(id) || HiddenThreads.isHidden(account, id)) continue;
+                    chats.put(id, titleOf(row, id, onScreen));
                 }
             }
         }
+        if (chats.isEmpty()) { toast(a, I18n.t(a, R.string.ig_batch_hide_empty)); return; }
+
+        final String acc = account;
+        IeDialog dialog = new IeDialog(a)
+                .title(I18n.t(a, R.string.ig_batch_hide_title))
+                .message(I18n.t(a, R.string.ig_batch_hide_hint));
+        List<CheckBox> boxes = new ArrayList<>();
+        List<String> ids = new ArrayList<>(chats.keySet());
+        for (String id : ids) boxes.add(dialog.checkBox(chats.get(id), false));
+        dialog.primary(I18n.t(a, R.string.ig_batch_hide_action), () -> {
+            int hidden = 0;
+            for (int i = 0; i < boxes.size(); i++) {
+                if (!boxes.get(i).isChecked()) continue;
+                HiddenThreadStore.Result r = HiddenThreads.setHidden(acc, ids.get(i), chats.get(ids.get(i)), true);
+                if (r.success) hidden++;
+            }
+            if (hidden == 0) return;
+            HideChatsHook.refreshAccount(acc);
+            HideChatsHook.refreshActiveInbox(a);
+            ConversationMenuHook.refreshAll();
+            toast(a, I18n.t(a, R.string.ig_batch_hide_done, hidden));
+        });
+        dialog.secondary(a.getString(android.R.string.cancel), null);
+        dialog.show();
     }
 
-    private void extractThreadIdFrom(Object obj, Set<String> out) {
-        if (obj == null) return;
-        String cn = obj.getClass().getName();
-        if (cn.contains("DirectThreadKey")) {
-            for (Field f : obj.getClass().getDeclaredFields()) {
-                if (f.getType() == String.class) {
-                    try {
-                        f.setAccessible(true);
-                        String val = (String) f.get(obj);
-                        if (val != null && !val.isEmpty()) {
-                            out.add(val);
-                            return;
-                        }
-                    } catch (Exception ignored) {}
+    /** Texts of the inbox rows on screen: a row model string equal to one of them is its name. */
+    private static Set<String> visibleTexts(Activity a) {
+        Set<String> out = new HashSet<>();
+        View list = threadListId != 0 ? a.findViewById(threadListId) : null;
+        ArrayDeque<View> stack = new ArrayDeque<>();
+        if (list != null) stack.push(list);
+        while (!stack.isEmpty()) {
+            View v = stack.pop();
+            if (v instanceof TextView t && t.getText() != null) {
+                String s = t.getText().toString().trim();
+                if (!s.isEmpty()) out.add(s);
+            }
+            CharSequence cd = v.getContentDescription();
+            if (cd != null && cd.length() > 0) out.add(cd.toString().trim());
+            if (v instanceof ViewGroup g) for (int i = 0; i < g.getChildCount(); i++) stack.push(g.getChildAt(i));
+        }
+        return out;
+    }
+
+    /** The chat's name: a row string shown in the inbox, else the most name-like one, else the id. */
+    static String titleOf(Object row, String id, Set<String> onScreen) {
+        List<String> strings = new ArrayList<>();
+        collectStrings(row, strings, Collections.newSetFromMap(new java.util.IdentityHashMap<>()), 0);
+        for (String s : strings) if (onScreen.contains(s.trim()) && looksLikeName(s, id)) return s.trim();
+        for (String s : strings) if (looksLikeName(s, id)) return s.trim();
+        return "Chat " + (id.length() > 6 ? "…" + id.substring(id.length() - 6) : id);
+    }
+
+    static boolean looksLikeName(String s, String id) {
+        if (s == null) return false;
+        String t = s.trim();
+        if (t.isEmpty() || t.length() > 64 || t.equals(id) || t.contains("://") || t.contains("\n")) return false;
+        boolean letter = false;
+        for (int i = 0; i < t.length(); i++) if (Character.isLetter(t.charAt(i))) { letter = true; break; }
+        if (!letter) return false;
+        return !t.matches("[A-Z0-9_]+"); // enum-style constants (usernames like mario_rossi stay)
+    }
+
+    private static void collectStrings(Object obj, List<String> out, Set<Object> seen, int depth) {
+        if (obj == null || depth > 2 || !seen.add(obj) || out.size() > 80) return;
+        try {
+            for (Class<?> c = obj.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                String cn = c.getName();
+                if (!cn.startsWith("X.") && !cn.startsWith("com.instagram.")) break;
+                for (Field f : ps.reso.instaeclipse.utils.core.SafeReflect.fields(c)) {
+                    if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+                    f.setAccessible(true);
+                    Object v;
+                    try { v = f.get(obj); } catch (Throwable e) { continue; }
+                    if (v instanceof CharSequence cs) out.add(cs.toString());
+                    else if (v != null) collectStrings(v, out, seen, depth + 1);
                 }
             }
-        }
+        } catch (Throwable ignored) {}
     }
 
-    private void scanViewForSelectedThreads(ViewGroup group, Set<String> out) {
-        for (int i = 0; i < group.getChildCount(); i++) {
-            View child = group.getChildAt(i);
-            if (child instanceof ViewGroup) {
-                scanViewForSelectedThreads((ViewGroup) child, out);
-            } else if (child instanceof CompoundButton && ((CompoundButton) child).isChecked()) {
-                 Object tag = child.getTag();
-                 if (tag != null) extractThreadIdFrom(tag, out);
-                 if (child.getParent() instanceof View) {
-                     extractThreadIdFrom(((View) child.getParent()).getTag(), out);
-                 }
-            } else if (child.isSelected()) {
-                 Object tag = child.getTag();
-                 if (tag != null) extractThreadIdFrom(tag, out);
-                 if (child.getParent() instanceof View) {
-                     extractThreadIdFrom(((View) child.getParent()).getTag(), out);
-                 }
-            }
-        }
+    private static void toast(Activity a, String msg) {
+        IeToast.makeText(a, msg, Toast.LENGTH_SHORT).show();
     }
 }

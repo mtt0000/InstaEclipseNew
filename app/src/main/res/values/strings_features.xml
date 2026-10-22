@@ -23,7 +23,7 @@
     <string name="ig_dialog_secret_menu_trigger">Secret Menu Trigger</string>
     <string name="ig_dialog_secret_menu_long_press">Long press</string>
     <string name="ig_dialog_secret_menu_double_tap_long_press">Double tap + long press</string>
-    <string name="ig_dialog_batch_hide_chats">Enable Batch Move to Hidden</string>
+    <string name="ig_dialog_batch_hide_chats">Batch hide button in the inbox</string>
     <string name="ig_dialog_quick_hide_chats">Include Hide Specific Chats</string>
     <string name="ig_dialog_quick_hide_folder_bar">Include Hide Folders Bar</string>
     <string name="ig_dialog_quick_empty_general">Include Empty General Folder</string>
@@ -39,4 +39,11 @@
     <string name="nav_shortcut_search">Search: open InstaEclipse menu</string>
     <string name="nav_shortcut_direct">Messages: Ghost Mode quick toggle</string>
     <string name="nav_shortcut_home">Home: Clean UI quick toggle</string>
+
+    <!-- Hide Specific Chats > batch hide (inbox header button) -->
+    <string name="ig_batch_hide_title">Hide chats</string>
+    <string name="ig_batch_hide_hint">Tick the chats to hide from the inbox. Only chats the inbox has already loaded are listed: scroll the inbox to load more.</string>
+    <string name="ig_batch_hide_action">Hide selected</string>
+    <string name="ig_batch_hide_empty">No chats to list yet: open the inbox and let it load, then try again.</string>
+    <string name="ig_batch_hide_done">%1$d chats hidden</string>
 </resources>
