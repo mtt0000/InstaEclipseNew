@@ -452,8 +452,11 @@ public class InboxFoldersHook {
 
     /** What Instagram produced for the header / bar sections, and the inbox state it built them from
      *  (distinct combinations only): tells the main inbox and the Requests folder apart. */
+    private static final java.util.Set<String> TRACED_SECTIONS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "INBOX_HEADER", "FILTER_ROW", "FOLDER", "HIDDEN_REQUESTS_ROW", "GENERAL_FOLDER_DISABLED"));
+
     private static void trace(String sec, Object igResult, Object state) {
-        if (traced.size() >= 24) return;
+        if (traced.size() >= 24 || !TRACED_SECTIONS.contains(sec)) return;
         String line = "sec=" + sec + " ig=" + describe(igResult, 1) + " state=" + describe(state, 1);
         if (line.length() > 1500) line = line.substring(0, 1500) + "…";
         if (traced.add(line)) diag("(IE|InboxFolders) TRACE " + line);
@@ -484,6 +487,39 @@ public class InboxFoldersHook {
         return sb.append('}').toString();
     }
 
+    private static final java.util.Set<String> watched = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+    private static final java.util.concurrent.atomic.AtomicInteger watchLines = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** Hooks every method {@code Class#name} (the Instagram step that re-creates the header) and records
+     *  what it receives and returns, a few times, so the input that picks the folder key shows up. */
+    private static void watchMethod(String classAndName) {
+        if (!watched.add(classAndName)) return;
+        try {
+            String[] parts = classAndName.split("#");
+            Class<?> k = Class.forName(parts[0], false, ps.reso.instaeclipse.Xposed.Module.hostClassLoader);
+            int hooked = 0;
+            for (Method m : k.getDeclaredMethods()) {
+                if (!m.getName().equals(parts[1])) continue;
+                XposedBridge.hookMethod(m, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        if (watchLines.incrementAndGet() > 12) return;
+                        StringBuilder sb = new StringBuilder("(IE|InboxFolders) STEP ").append(classAndName)
+                                .append(java.util.Arrays.toString(m.getParameterTypes())).append(" this=")
+                                .append(describe(param.thisObject, 0)).append(" args=[");
+                        if (param.args != null) for (Object a : param.args) sb.append(describe(a, 1)).append(", ");
+                        sb.append("] -> ").append(describe(param.getResult(), 1));
+                        String line = sb.length() > 1500 ? sb.substring(0, 1500) + "…" : sb.toString();
+                        diag(line);
+                    }
+                });
+                hooked++;
+            }
+            diag("(IE|InboxFolders) watching " + classAndName + " x" + hooked);
+        } catch (Throwable t) {
+            diag("(IE|InboxFolders) watch " + classAndName + " failed: " + t);
+        }
+    }
+
     private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> Boolean.FALSE);
     private static volatile boolean spyInstalled;
     private static final java.util.Set<String> spied = java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>());
@@ -499,15 +535,18 @@ public class InboxFoldersHook {
                     if (BUILDING.get() || spied.size() >= 8) return;
                     String args = java.util.Arrays.toString(param.args);
                     if (!spied.add(args)) return;
-                    String caller = "";
+                    StringBuilder callers = new StringBuilder();
+                    String first = null;
                     for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
                         String c = e.getClassName();
-                        if (c.startsWith("X.") && !c.equals(ctor.getDeclaringClass().getName())) {
-                            caller = c + "." + e.getMethodName();
-                            break;
-                        }
+                        if (!c.startsWith("X.") || c.equals(ctor.getDeclaringClass().getName())) continue;
+                        if (first == null) first = c + "#" + e.getMethodName();
+                        if (callers.length() > 0) callers.append(" < ");
+                        callers.append(c).append('.').append(e.getMethodName());
+                        if (callers.length() > 300) break;
                     }
-                    diag("(IE|InboxFolders) IG header args=" + args + " from " + caller);
+                    diag("(IE|InboxFolders) IG header args=" + args + " from " + callers);
+                    if (first != null) watchMethod(first);
                 }
             });
         } catch (Throwable t) {
