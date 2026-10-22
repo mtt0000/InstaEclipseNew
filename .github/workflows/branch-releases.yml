@@ -6,8 +6,8 @@ name: Branch Releases
 # - branch deleted: its release and tag are removed
 # Every run also removes releases whose branch no longer exists.
 #
-# Signing: if the repository secrets SIGNING_KEYSTORE_BASE64, SIGNING_KEYSTORE_PASSWORD,
-# SIGNING_KEY_ALIAS and SIGNING_KEY_PASSWORD are set, the release build is signed with that key
+# Signing: if the repository secrets KEYSTORE_BASE64, STORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD
+# (the shared key synced by mtt0000/shared-workflows) are set, the release build is signed with that key
 # (same signature on every build, so updates install over each other). Without them the debug
 # build is published: it installs, but each run is signed with a new debug key, so updating
 # needs an uninstall first.
@@ -88,10 +88,10 @@ jobs:
       - name: Build APK
         id: build
         env:
-          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           APK_NAME: ${{ steps.meta.outputs.apk }}
         run: |
           set -euo pipefail
