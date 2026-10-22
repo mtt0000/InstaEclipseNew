@@ -50,4 +50,10 @@
     <!-- Hide folders bar: Instagram's personal-account inbox header shown in its place -->
     <string name="ig_direct_header_messages">Messaggi</string>
     <string name="ig_direct_header_requests">Richieste</string>
+
+    <!-- Hide folders bar: diagnostics shown in the module menu -->
+    <string name="ig_folders_diag_title">Diagnostica barra cartelle</string>
+    <string name="ig_folders_diag_hint">Attiva Nascondi barra delle cartelle, apri una volta i Direct, poi torna qui e tocca Copia.</string>
+    <string name="ig_folders_diag_copy">Copia</string>
+    <string name="ig_folders_diag_copied">Copiato</string>
 </resources>

@@ -258,11 +258,11 @@ public class InboxFoldersHook {
                             // Never leave the folder bar half-built: drop it, as the plain hide did.
                             String sec = sectionName(param.thisObject);
                             if ("FOLDER".equals(sec) || "FILTER_ROW".equals(sec)) param.setResult(null);
-                            if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) header swap failed: " + t); }
+                            if (!probeLogged) { probeLogged = true; diag("(IE|InboxFolders) header swap failed: " + t); }
                         }
                     }
                 });
-                ModuleLog.line("(IE|InboxFolders) section generators hooked");
+                diag("(IE|InboxFolders) section generators hooked");
             }
 
         } catch (Throwable t) {
@@ -306,8 +306,8 @@ public class InboxFoldersHook {
                 }
                 sb.append(']');
             }
-            ModuleLog.line(sb.toString());
-            if (headerGen == null) { ModuleLog.line("(IE|InboxFolders) DUMP no INBOX_HEADER generator (holders " + (holders != null ? "found" : "missing") + ")"); return; }
+            diag(sb.toString());
+            if (headerGen == null) { diag("(IE|InboxFolders) DUMP no INBOX_HEADER generator (holders " + (holders != null ? "found" : "missing") + ")"); return; }
             for (Class<?> c = headerGen.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
                 StringBuilder g = new StringBuilder("(IE|InboxFolders) DUMP headerGen ").append(c.getName()).append(" fields:");
                 for (Field f : c.getDeclaredFields()) {
@@ -320,16 +320,16 @@ public class InboxFoldersHook {
                     g.append(' ').append(m.getName()).append(java.util.Arrays.toString(m.getParameterTypes()))
                             .append("->").append(m.getReturnType().getName());
                 }
-                ModuleLog.line(g.toString());
+                diag(g.toString());
                 for (Field f : c.getDeclaredFields()) {
                     if (Modifier.isStatic(f.getModifiers()) || !f.getType().getName().startsWith("X.")) continue;
                     for (Constructor<?> k : f.getType().getDeclaredConstructors())
-                        ModuleLog.line("(IE|InboxFolders) DUMP ctor " + f.getType().getName()
+                        diag("(IE|InboxFolders) DUMP ctor " + f.getType().getName()
                                 + java.util.Arrays.toString(k.getParameterTypes()));
                 }
             }
         } catch (Throwable t) {
-            ModuleLog.line("(IE|InboxFolders) DUMP failed: " + t);
+            diag("(IE|InboxFolders) DUMP failed: " + t);
         }
     }
 
@@ -365,7 +365,7 @@ public class InboxFoldersHook {
                     if (headerGen != null) header = buildHeader(headerGen, state);
                     // The slot must accept a header item, or Instagram's caller would crash on the cast.
                     if (header != null && itemReturnType != null && !itemReturnType.isInstance(header)) {
-                        if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) header " + header.getClass().getName() + " doesn't fit slot " + itemReturnType.getName()); }
+                        if (!probeLogged) { probeLogged = true; diag("(IE|InboxFolders) header " + header.getClass().getName() + " doesn't fit slot " + itemReturnType.getName()); }
                         header = null;
                     }
                 }
@@ -404,7 +404,7 @@ public class InboxFoldersHook {
             if (headerConstructor(f.getType()) != null) { itemField = f; break; }
         }
         if (itemField == null) {
-            if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) no header item field with a usable constructor"); }
+            if (!probeLogged) { probeLogged = true; diag("(IE|InboxFolders) no header item field with a usable constructor"); }
             return null;
         }
         // Our own item, cached here: the generator's field may hold Instagram's Requests-folder header
@@ -428,7 +428,7 @@ public class InboxFoldersHook {
         }
         if (!ctorLogged) {
             ctorLogged = true;
-            ModuleLog.line("(IE|InboxFolders) header item " + ctor.getDeclaringClass().getName()
+            diag("(IE|InboxFolders) header item " + ctor.getDeclaringClass().getName()
                     + java.util.Arrays.toString(types) + " args=" + java.util.Arrays.toString(args));
         }
         Object header = ctor.newInstance(args);
@@ -488,13 +488,38 @@ public class InboxFoldersHook {
                 : fromState != null && enumScore(((Enum<?>) fromState).name()) >= 0 ? fromState : best;
         if (!enumLogged) {
             enumLogged = true;
-            ModuleLog.line("(IE|InboxFolders) header mode " + enumType.getName() + java.util.Arrays.toString(all)
+            diag("(IE|InboxFolders) header mode " + enumType.getName() + java.util.Arrays.toString(all)
                     + " state=" + fromState + " chosen=" + chosen);
         }
         return chosen;
     }
 
     private static volatile boolean enumLogged;
+
+    // Diagnostics kept in memory too, shown with a Copy button in Hide chats > Folders bar
+    // diagnostics: the log viewer is hard to copy these long lines from.
+    private static final StringBuilder DIAG = new StringBuilder();
+    private static final int DIAG_MAX = 30000;
+
+    private static void diag(String line) {
+        ModuleLog.line(line);
+        synchronized (DIAG) {
+            if (DIAG.length() < DIAG_MAX) DIAG.append(line, 0, Math.min(line.length(), DIAG_MAX - DIAG.length())).append('\n');
+        }
+    }
+
+    /** What the folders-bar header swap found on this Instagram build, for the user to copy. */
+    public static String diagnostics() {
+        StringBuilder out = new StringBuilder();
+        out.append("hideDirectFoldersBar=").append(FeatureFlags.hideDirectFoldersBar)
+                .append(" barSlot=").append(barSlot)
+                .append(" headerSectionSeen=").append(headerSectionSeen)
+                .append(" holders=").append(holdersRef.get() != null)
+                .append(" builtHeader=").append(builtHeader != null ? builtHeader.getClass().getName() : "null")
+                .append('\n');
+        synchronized (DIAG) { out.append(DIAG); }
+        return out.toString();
+    }
     private static volatile Object builtHeader;
 
     /** > 0: main inbox; < 0: requests / spam / hidden / other folders; 0: can't tell. */

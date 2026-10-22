@@ -1889,6 +1889,26 @@ public class DialogUtils {
         showSectionDialog(context, I18n.t(context, R.string.menu_app), layout, () -> {});
     }
 
+    /** What "Hide folders bar" found on this Instagram build, selectable and with a Copy button. */
+    private static void showFoldersDiagnostics(Context context) {
+        String text = ps.reso.instaeclipse.mods.ghost.InboxFoldersHook.diagnostics();
+        IeDialog dialog = new IeDialog(context)
+                .title(I18n.t(context, R.string.ig_folders_diag_title))
+                .message(I18n.t(context, R.string.ig_folders_diag_hint) + "\n\n" + text)
+                .selectable();
+        dialog.primary(I18n.t(context, R.string.ig_folders_diag_copy), () -> {
+            try {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                        context.getSystemService(Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("InstaEclipse folders", text));
+                ps.reso.instaeclipse.utils.toast.IeToast.makeText(context,
+                        I18n.t(context, R.string.ig_folders_diag_copied), android.widget.Toast.LENGTH_SHORT).show();
+            } catch (Throwable ignored) {}
+        });
+        dialog.secondary(context.getString(android.R.string.cancel), null);
+        dialog.show();
+    }
+
     private static void showAppDisguiseDialog(Context context, android.widget.TextView label) {
         String[] options = {"Default", "Calculator", "Notes", "File Manager", "Calendar", "Weather"};
         String[] keys = {
@@ -1985,6 +2005,8 @@ public class DialogUtils {
             ps.reso.instaeclipse.mods.ghost.HideChatsHook.refreshActiveInbox(activityOf(context));
         });
         hideCard.addView(hideDirectFoldersBar);
+        hideCard.addView(createActionRow(context, R.drawable.ic_info,
+                I18n.t(context, R.string.ig_folders_diag_title), A_PRIVACY, v -> showFoldersDiagnostics(context)));
 
         hideCard.addView(createActionRow(context, R.drawable.ic_chat,
                 I18n.t(context, R.string.ie_chat_actions), A_PRIVACY,

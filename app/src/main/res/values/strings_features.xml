@@ -50,4 +50,10 @@
     <!-- Hide folders bar: Instagram's personal-account inbox header shown in its place -->
     <string name="ig_direct_header_messages">Messages</string>
     <string name="ig_direct_header_requests">Requests</string>
+
+    <!-- Hide folders bar: diagnostics shown in the module menu -->
+    <string name="ig_folders_diag_title">Folders bar diagnostics</string>
+    <string name="ig_folders_diag_hint">Turn on Hide folders bar, open the DMs once, then come back here and tap Copy.</string>
+    <string name="ig_folders_diag_copy">Copy</string>
+    <string name="ig_folders_diag_copied">Copied</string>
 </resources>
