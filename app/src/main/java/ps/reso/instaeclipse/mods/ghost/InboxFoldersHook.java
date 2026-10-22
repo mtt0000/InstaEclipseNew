@@ -240,10 +240,13 @@ public class InboxFoldersHook {
                 sectionField = sectionEnumField;
                 holdersFieldRef = holdersField;
                 itemReturnType = singleItemGenMethod.getReturnType();
-                // One build pass of the inbox view model = one calculateAndApplyDiffUpdate call: the
-                // native header goes in only one slot per pass (INBOX_HEADER or the hidden FOLDER one).
-                XposedBridge.hookMethod(diffUpdateMethodResolved, new XC_MethodHook() {
-                    @Override protected void beforeHookedMethod(MethodHookParam param) { pass++; }
+                // The section holders (one generator per inbox section, INBOX_HEADER among them):
+                // remembered at construction, since on IG 385713116 the view-model generator
+                // methods above never run, so they can't be read through it.
+                XposedBridge.hookAllConstructors(holdersClass, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.thisObject != null) holdersRef = new WeakReference<>(param.thisObject);
+                    }
                 });
                 XposedBridge.hookMethod(singleItemGenMethod, new XC_MethodHook() {
                     @Override
@@ -253,7 +256,8 @@ public class InboxFoldersHook {
                             onSectionItem(param);
                         } catch (Throwable t) {
                             // Never leave the folder bar half-built: drop it, as the plain hide did.
-                            if (!"INBOX_HEADER".equals(sectionName(param.thisObject))) param.setResult(null);
+                            String sec = sectionName(param.thisObject);
+                            if ("FOLDER".equals(sec) || "FILTER_ROW".equals(sec)) param.setResult(null);
                             if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) header swap failed: " + t); }
                         }
                     }
@@ -268,26 +272,30 @@ public class InboxFoldersHook {
 
     // ── Hide folders bar: show Instagram's own "Messages / Requests" header instead ──
     // A personal account gets the INBOX_HEADER section ("Messages" + "Requests"); a professional
-    // one gets the FOLDER tabs (Primary / General / Requests) and no header. With the bar hidden we
-    // build that header item and put it where the bar was, so the inbox looks like a personal
-    // account's and Requests stays one tap away (Instagram's binder handles the tap).
+    // one gets the folder tabs (Primary / General / Requests: the FILTER_ROW section on IG
+    // 385713116, FOLDER on older builds) and no header. With the bar hidden we build that header
+    // item and put it where the bar was, so the inbox looks like a personal account's and Requests
+    // stays one tap away (Instagram's binder handles the tap).
 
     private static Field sectionField;
     private static Field holdersFieldRef;
     private static Class<?> itemReturnType;
-    private static volatile long pass;
-    private static volatile long headerPass = -1;   // pass in which a header was produced
+    private static volatile WeakReference<Object> holdersRef = new WeakReference<>(null);
+    /** Instagram generates its own header section on this account (personal account): use that slot. */
+    private static volatile boolean headerSectionSeen;
+    /** The first bar section seen (FOLDER or FILTER_ROW, depending on the IG build): the header
+     *  goes only there, so a build generating both never shows it twice. */
+    private static volatile String barSlot;
     private static volatile Constructor<?> headerCtor;
     private static volatile boolean probeLogged, ctorLogged, dumpLogged;
 
     /** One-time log of the shapes involved, so a header that doesn't show can be fixed from a user log. */
-    private static void dump(Object headerGen, Object folderItem) {
+    private static void dump(String barSection, Object headerGen, Object folderItem) {
         try {
-            StringBuilder sb = new StringBuilder("(IE|InboxFolders) DUMP slot=")
+            StringBuilder sb = new StringBuilder("(IE|InboxFolders) DUMP bar=").append(barSection).append(" slot=")
                     .append(itemReturnType != null ? itemReturnType.getName() : "?")
                     .append(" folderItem=").append(folderItem != null ? folderItem.getClass().getName() : "null");
-            Object vmGen = lastVmGeneratorRef.get();
-            Object holders = vmGen != null && holdersFieldRef != null ? holdersFieldRef.get(vmGen) : null;
+            Object holders = holders();
             if (holders != null) {
                 sb.append(" sections=[");
                 for (Field f : holders.getClass().getDeclaredFields()) {
@@ -299,7 +307,7 @@ public class InboxFoldersHook {
                 sb.append(']');
             }
             ModuleLog.line(sb.toString());
-            if (headerGen == null) { ModuleLog.line("(IE|InboxFolders) DUMP no INBOX_HEADER generator"); return; }
+            if (headerGen == null) { ModuleLog.line("(IE|InboxFolders) DUMP no INBOX_HEADER generator (holders " + (holders != null ? "found" : "missing") + ")"); return; }
             for (Class<?> c = headerGen.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
                 StringBuilder g = new StringBuilder("(IE|InboxFolders) DUMP headerGen ").append(c.getName()).append(" fields:");
                 for (Field f : c.getDeclaredFields()) {
@@ -340,41 +348,44 @@ public class InboxFoldersHook {
         if (sec == null) return;
         Object state = param.args != null && param.args.length > 0 ? param.args[0] : null;
         switch (sec) {
-            case "FILTER_ROW":
-                param.setResult(null);
-                break;
             case "INBOX_HEADER": {
-                if (headerPass == pass) { param.setResult(null); break; } // already in the folder slot
+                headerSectionSeen = true;
                 Object header = param.getResult();
                 if (header == null) header = buildHeader(param.thisObject, state);
-                if (header != null) { headerPass = pass; param.setResult(header); }
+                if (header != null) param.setResult(header);
                 break;
             }
-            case "FOLDER": {
+            case "FOLDER":
+            case "FILTER_ROW": {
+                if (barSlot == null) barSlot = sec;
                 Object header = null;
-                if (headerPass != pass) {
+                if (sec.equals(barSlot) && !headerSectionSeen) {
                     Object headerGen = headerGenerator();
-                    if (!dumpLogged) { dumpLogged = true; dump(headerGen, param.getResult()); }
+                    if (!dumpLogged) { dumpLogged = true; dump(sec, headerGen, param.getResult()); }
                     if (headerGen != null) header = buildHeader(headerGen, state);
+                    // The slot must accept a header item, or Instagram's caller would crash on the cast.
+                    if (header != null && itemReturnType != null && !itemReturnType.isInstance(header)) {
+                        if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) header " + header.getClass().getName() + " doesn't fit slot " + itemReturnType.getName()); }
+                        header = null;
+                    }
                 }
-                // The slot must accept a header item, or Instagram's caller would crash on the cast.
-                if (header != null && itemReturnType != null && !itemReturnType.isInstance(header)) {
-                    if (!probeLogged) { probeLogged = true; ModuleLog.line("(IE|InboxFolders) header " + header.getClass().getName() + " doesn't fit slot " + itemReturnType.getName()); }
-                    header = null;
-                }
-                if (header != null) headerPass = pass;
-                param.setResult(header); // null = just hide the bar (header already shown or unavailable)
+                param.setResult(header); // null = just hide the bar
                 break;
             }
             default:
         }
     }
 
+    private static Object holders() throws Throwable {
+        Object h = holdersRef.get();
+        if (h != null) return h;
+        Object vmGen = lastVmGeneratorRef.get();
+        return vmGen != null && holdersFieldRef != null ? holdersFieldRef.get(vmGen) : null;
+    }
+
     /** The INBOX_HEADER section generator, from the view model generator's section holders. */
     private static Object headerGenerator() throws Throwable {
-        Object vmGen = lastVmGeneratorRef.get();
-        if (vmGen == null || holdersFieldRef == null) return null;
-        Object holders = holdersFieldRef.get(vmGen);
+        Object holders = holders();
         if (holders == null) return null;
         for (Field f : holders.getClass().getDeclaredFields()) {
             if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
