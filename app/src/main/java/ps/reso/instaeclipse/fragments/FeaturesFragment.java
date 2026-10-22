@@ -1473,14 +1473,20 @@ public class FeaturesFragment extends Fragment {
                 .setSingleChoiceItems(ps.reso.instaeclipse.utils.core.AppDisguiseManager.pickerAdapter(
                         requireContext(), getResources(), options), selected, (d, which) -> {
                     String val = keys[which];
-                    localCache.edit().putString("appDisguise", val).apply();
+                    // Saved here and sent to Instagram like the other string settings; then this
+                    // app switches its own launcher entry.
+                    localCache.edit().putString("appDisguise", val).commit();
+                    makeLocalCacheWorldReadable();
+                    Intent b = new Intent("ps.reso.instaeclipse.ACTION_UPDATE_PREF_STRING");
+                    b.putExtra("key", "appDisguise");
+                    b.putExtra("value", val);
+                    ps.reso.instaeclipse.utils.core.CommonUtils.broadcastToInstagram(requireContext(), b);
                     ps.reso.instaeclipse.utils.core.AppDisguiseManager.applyDisguise(requireContext(), val);
                     if (trigger instanceof android.widget.TextView) {
                         ((android.widget.TextView) trigger).setText(getString(R.string.ig_dialog_app_disguise) + "  ·  " + options[which]);
                     }
                     android.widget.Toast.makeText(requireContext(), R.string.ig_app_disguise_changed, android.widget.Toast.LENGTH_LONG).show();
                     d.dismiss();
-                    try { java.lang.reflect.Method m = getClass().getDeclaredMethod("syncToModule"); m.setAccessible(true); m.invoke(this); } catch (Exception ignored) {}
                 }).show();
     }
 

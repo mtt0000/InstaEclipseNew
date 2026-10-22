@@ -13,5 +13,7 @@ public class InstaEclipseApp extends Application {
         // modern flavor: mirrors "instaeclipse_cache" into Vector's remote preferences (libxposed
         // API 102, read by the hooked app); legacy flavor: no-op (Instagram uses XSharedPreferences)
         RemotePrefsMirror.start(this);
+        // App disguise: exactly one launcher entry, the saved one (repairs an interrupted switch).
+        ps.reso.instaeclipse.utils.core.AppDisguiseManager.reconcile(this);
     }
 }

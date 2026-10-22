@@ -49,13 +49,29 @@ public class AppDisguiseManager {
         }
     }
 
-    /** Saves the disguise and switches the launcher entry (in the companion app; from Instagram's
-     *  process the saved setting reaches the companion, which switches it, see PrefsSyncProvider). */
+    /**
+     * Applies a disguise picked in a menu. In the companion app: switches the launcher entry (the
+     * caller stores the choice in the companion's own settings and sends it to Instagram);
+     * SettingsManager is Instagram's settings store and isn't set up in this process, so calling
+     * it here crashed the app before the icon changed. In Instagram's process: saves the setting,
+     * which reaches the companion, the only app allowed to switch it (see PrefsSyncProvider).
+     */
     public static void applyDisguise(Context context, String disguiseType) {
         if (disguiseType == null) disguiseType = DEFAULT;
         FeatureFlags.appDisguise = disguiseType;
-        SettingsManager.saveAllFlags();
         if (BuildConfig.APPLICATION_ID.equals(context.getPackageName())) applyAliases(context, disguiseType);
+        else SettingsManager.saveAllFlags();
+    }
+
+    /** Companion app start: brings the launcher entries back in line with the saved disguise, so
+     *  exactly one is enabled even after an interrupted switch. Cheap when nothing changed. */
+    public static void reconcile(Context context) {
+        try {
+            String saved = CommonUtils.companionCache(context).getString("appDisguise", DEFAULT);
+            applyAliases(context, saved);
+        } catch (Throwable t) {
+            ModuleLog.line("(InstaEclipse) App disguise: launcher check failed: " + t);
+        }
     }
 
     /** Enables the chosen launcher alias and disables the others. Companion app process only:
@@ -64,13 +80,53 @@ public class AppDisguiseManager {
         Option chosen = Option.of(disguiseType);
         PackageManager pm = context.getPackageManager();
         String pkg = BuildConfig.APPLICATION_ID;
-        try {
-            // Enable first: the app always keeps one launcher entry.
-            setAliasState(pm, pkg, chosen.alias, true);
-            for (Option o : Option.values()) if (o != chosen) setAliasState(pm, pkg, o.alias, false);
-        } catch (SecurityException e) {
-            ModuleLog.line("(InstaEclipse) App disguise: launcher entry not switched: " + e.getMessage());
+        // Only the entries whose state changes, chosen one first: the app always keeps one entry.
+        java.util.List<ComponentName> components = new java.util.ArrayList<>();
+        java.util.List<Integer> states = new java.util.ArrayList<>();
+        for (Option o : orderChosenFirst(chosen)) {
+            ComponentName c = new ComponentName(pkg, pkg + o.alias);
+            int state = o == chosen ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+            if (isEnabled(pm, c, o) == (o == chosen)) continue;
+            components.add(c);
+            states.add(state);
         }
+        if (components.isEmpty()) return;
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                // One change for the launcher: switched one by one, several launchers dropped the
+                // app from the drawer until they were restarted.
+                java.util.List<PackageManager.ComponentEnabledSetting> batch = new java.util.ArrayList<>();
+                for (int i = 0; i < components.size(); i++)
+                    batch.add(new PackageManager.ComponentEnabledSetting(components.get(i), states.get(i),
+                            PackageManager.DONT_KILL_APP));
+                pm.setComponentEnabledSettings(batch);
+            } else {
+                for (int i = 0; i < components.size(); i++)
+                    pm.setComponentEnabledSetting(components.get(i), states.get(i), PackageManager.DONT_KILL_APP);
+            }
+        } catch (Throwable t) {
+            ModuleLog.line("(InstaEclipse) App disguise: launcher entry not switched: " + t);
+            // Never leave the app without a launcher entry.
+            try {
+                pm.setComponentEnabledSetting(new ComponentName(pkg, pkg + chosen.alias),
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    /** Effective state: a never-changed entry keeps the manifest's (only Default is enabled there). */
+    private static boolean isEnabled(PackageManager pm, ComponentName c, Option o) {
+        int state = pm.getComponentEnabledSetting(c);
+        if (state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT) return o == Option.DEFAULT_OPTION;
+        return state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+    }
+
+    private static java.util.List<Option> orderChosenFirst(Option chosen) {
+        java.util.List<Option> out = new java.util.ArrayList<>();
+        out.add(chosen);
+        for (Option o : Option.values()) if (o != chosen) out.add(o);
+        return out;
     }
 
     /**
@@ -99,12 +155,5 @@ public class AppDisguiseManager {
                 return row;
             }
         };
-    }
-
-    private static void setAliasState(PackageManager pm, String pkg, String aliasName, boolean enable) {
-        ComponentName componentName = new ComponentName(pkg, pkg + aliasName);
-        int state = enable ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
-        if (pm.getComponentEnabledSetting(componentName) == state) return;
-        pm.setComponentEnabledSetting(componentName, state, PackageManager.DONT_KILL_APP);
     }
 }

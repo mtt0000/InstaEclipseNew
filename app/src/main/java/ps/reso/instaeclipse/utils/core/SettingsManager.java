@@ -26,6 +26,8 @@ public class SettingsManager {
     }
 
     public static void saveAllFlags() {
+        // Instagram's settings store: not set up outside Instagram's process (init never ran).
+        if (prefs == null) return;
         // Snapshot to stamp the keys this save changes (see CompanionSync).
         java.util.Map<String, ?> before = new java.util.HashMap<>(prefs.getAll());
         SharedPreferences.Editor editor = prefs.edit();
