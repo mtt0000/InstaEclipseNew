@@ -51,8 +51,8 @@ import ps.reso.instaeclipse.utils.toast.IeToast;
  *   detects the inbox by;</li>
  *   <li>the chats come from the inbox rows {@link HiddenInboxFilter} sees (the same thread ids it
  *   filters on), recorded per account before filtering;</li>
- *   <li>each chat is named by the row text shown in the inbox when it is on screen, else by the
- *   row model's most name-like string.</li>
+ *   <li>each chat is named by the row text shown in the inbox, else by its members' usernames
+ *   (see {@link #titleOf}).</li>
  * </ul>
  * Hidden by Clean UI (not added while it is on, tracked so an existing one goes at once).
  */
@@ -210,11 +210,15 @@ public final class BatchHideChatsHook {
                 for (List<?> list : lists) for (Object row : list) {
                     String id = HiddenInboxFilter.threadIdOfRow(row);
                     if (id == null || chats.containsKey(id) || HiddenThreads.isHidden(account, id)) continue;
-                    chats.put(id, titleOf(row, id, onScreen));
+                    chats.put(id, titleOf(row, id, account, onScreen));
                 }
             }
         }
         if (chats.isEmpty()) { toast(a, I18n.t(a, R.string.ig_batch_hide_empty)); return; }
+        int unnamed = 0;
+        for (Map.Entry<String, String> e : chats.entrySet()) if (e.getValue().equals(fallbackName(e.getKey()))) unnamed++;
+        ModuleLog.line(TAG + "picker chats=" + chats.size() + " unnamed=" + unnamed
+                + " onScreenTexts=" + onScreen.size());
 
         final String acc = account;
         IeDialog dialog = new IeDialog(a)
@@ -259,23 +263,105 @@ public final class BatchHideChatsHook {
         return out;
     }
 
-    /** The chat's name: a row string shown in the inbox, else the most name-like one, else the id. */
-    static String titleOf(Object row, String id, Set<String> onScreen) {
+    /**
+     * The chat's name, best source first:
+     * 1. a row string that is shown in the inbox right now (the row's own label);
+     * 2. the usernames of the chat's members: the {@code User} objects the row holds, read with
+     *    the module's username getter, leaving out the account itself;
+     * 3. a row string that looks like a display / group name (not a status word like "unknown");
+     * 4. "Chat …" + the end of the thread id.
+     */
+    static String titleOf(Object row, String id, String account, Set<String> onScreen) {
         List<String> strings = new ArrayList<>();
         collectStrings(row, strings, Collections.newSetFromMap(new java.util.IdentityHashMap<>()), 0);
         for (String s : strings) if (onScreen.contains(s.trim()) && looksLikeName(s, id)) return s.trim();
+
+        List<String> members = memberUsernames(row, account);
+        if (!members.isEmpty()) {
+            String names = String.join(", ", members.subList(0, Math.min(3, members.size())));
+            return members.size() > 3 ? names + " +" + (members.size() - 3) : names;
+        }
         for (String s : strings) if (looksLikeName(s, id)) return s.trim();
+        return fallbackName(id);
+    }
+
+    private static String fallbackName(String id) {
         return "Chat " + (id.length() > 6 ? "…" + id.substring(id.length() - 6) : id);
     }
+
+    /** Status / enum words Instagram keeps as plain strings in its models. */
+    private static final Set<String> NOT_NAMES = new HashSet<>(java.util.Arrays.asList(
+            "unknown", "null", "none", "default", "inbox", "primary", "general", "other", "pending",
+            "true", "false", "private", "group", "thread", "direct", "active", "inactive", "undefined"));
 
     static boolean looksLikeName(String s, String id) {
         if (s == null) return false;
         String t = s.trim();
         if (t.isEmpty() || t.length() > 64 || t.equals(id) || t.contains("://") || t.contains("\n")) return false;
+        if (NOT_NAMES.contains(t.toLowerCase(java.util.Locale.ROOT))) return false;
         boolean letter = false;
         for (int i = 0; i < t.length(); i++) if (Character.isLetter(t.charAt(i))) { letter = true; break; }
         if (!letter) return false;
-        return !t.matches("[A-Z0-9_]+"); // enum-style constants (usernames like mario_rossi stay)
+        if (t.matches("[A-Z0-9_]+")) return false; // enum-style constants
+        // A bare lowercase word is a key or status value; members' usernames come from step 2.
+        return !t.matches("[a-z]+");
+    }
+
+    private static final String USER = "com.instagram.user.model.User";
+
+    /** Usernames of the User objects reachable from the row (members), without the account itself. */
+    private static List<String> memberUsernames(Object row, String account) {
+        List<Object> users = new ArrayList<>();
+        collectUsers(row, users, Collections.newSetFromMap(new java.util.IdentityHashMap<>()), 0);
+        List<String> out = new ArrayList<>();
+        for (Object u : users) {
+            if (account != null && hasId(u, account)) continue;
+            String name = ps.reso.instaeclipse.utils.users.UserUtils.callUsernameGetter(u);
+            if (name != null && !NOT_NAMES.contains(name) && !out.contains(name)) out.add(name);
+        }
+        return out;
+    }
+
+    private static void collectUsers(Object obj, List<Object> out, Set<Object> seen, int depth) {
+        if (obj == null || depth > 4 || out.size() > 16 || !seen.add(obj)) return;
+        if (obj.getClass().getName().equals(USER)) { out.add(obj); return; }
+        if (obj instanceof java.util.Collection<?> c) {
+            int n = 0;
+            for (Object o : c) { if (n++ > 32) break; collectUsers(o, out, seen, depth + 1); }
+            return;
+        }
+        if (obj instanceof java.util.Map<?, ?> m) {
+            int n = 0;
+            for (Object o : m.values()) { if (n++ > 32) break; collectUsers(o, out, seen, depth + 1); }
+            return;
+        }
+        if (obj instanceof Object[] arr) {
+            for (int i = 0; i < Math.min(arr.length, 32); i++) collectUsers(arr[i], out, seen, depth + 1);
+            return;
+        }
+        try {
+            for (Class<?> c = obj.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                String cn = c.getName();
+                if (!cn.startsWith("X.") && !cn.startsWith("com.instagram.")) break;
+                for (Field f : ps.reso.instaeclipse.utils.core.SafeReflect.fields(c)) {
+                    if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive() || f.getType() == String.class) continue;
+                    f.setAccessible(true);
+                    Object v;
+                    try { v = f.get(obj); } catch (Throwable e) { continue; }
+                    collectUsers(v, out, seen, depth + 1);
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    /** True when one of the User's String fields is {@code id} (its user id). */
+    private static boolean hasId(Object user, String id) {
+        for (Class<?> c = user.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+            for (Field f : ps.reso.instaeclipse.utils.core.SafeReflect.fields(c)) {
+                if (f.getType() != String.class || Modifier.isStatic(f.getModifiers())) continue;
+                try { f.setAccessible(true); if (id.equals(f.get(user))) return true; } catch (Throwable ignored) {}
+            }
+        return false;
     }
 
     private static void collectStrings(Object obj, List<String> out, Set<Object> seen, int depth) {

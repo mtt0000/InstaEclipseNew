@@ -23,4 +23,13 @@ public class BatchHideTitleTest {
         assertFalse(BatchHideChatsHook.looksLikeName("   ", id));
         assertFalse(BatchHideChatsHook.looksLikeName(null, id));
     }
+
+    @Test public void statusWordsAreNotNames() {
+        String id = "340282366841710300949128";
+        assertFalse(BatchHideChatsHook.looksLikeName("unknown", id));
+        assertFalse(BatchHideChatsHook.looksLikeName("UNKNOWN", id));
+        assertFalse(BatchHideChatsHook.looksLikeName("Unknown", id));
+        assertFalse(BatchHideChatsHook.looksLikeName("general", id));
+        assertFalse(BatchHideChatsHook.looksLikeName("pending", id));
+    }
 }
