@@ -38,6 +38,7 @@ public class InboxFoldersHook {
     public void install(DexKitBridge bridge, ClassLoader loader) {
         installFolderDescriptorHooks(bridge, loader);
         installVmGeneratorHooks(bridge, loader);
+        installHeaderStyleHooks(bridge, loader);
     }
 
     public static void refreshActiveInbox(Activity activity) {
@@ -270,6 +271,106 @@ public class InboxFoldersHook {
         }
     }
 
+    // ── Hide folders bar: draw the header the way a personal account does ──
+    // Instagram's Compose header (InboxHeader.kt) has three looks for the header item: filtering,
+    // "MRSortHeader" ("Most recent ⌄" + "Hidden requests") and the default "Messages … Requests".
+    // MRSortHeader is picked by a static gate(UserSession, boolean) that is true only for accounts
+    // with inbox folders (professional) in an experiment (X.08cv.A0F on IG 385811006). The default
+    // header's Requests tap opens the requests folder on any account. So while the header item that
+    // replaces the bar is drawn, that gate answers false; other screens using the header keep theirs.
+
+    private static final ThreadLocal<java.util.ArrayDeque<Boolean>> DRAWING_OUR_HEADER =
+            ThreadLocal.withInitial(java.util.ArrayDeque::new);
+    private static final ThreadLocal<java.util.ArrayDeque<Boolean>> IN_HEADER_ENTRY =
+            ThreadLocal.withInitial(java.util.ArrayDeque::new);
+    /** The item Instagram's UI re-created from ours (it rebuilds it with its own label and count). */
+    private static volatile WeakReference<Object> drawnHeaderRef = new WeakReference<>(null);
+    private static volatile boolean gateLogged;
+
+    private void installHeaderStyleHooks(DexKitBridge bridge, ClassLoader loader) {
+        try {
+            List<MethodData> found = bridge.findMethod(FindMethod.create()
+                    .matcher(MethodMatcher.create().usingStrings("inboxheader.ui.InboxHeader (InboxHeader.kt:")));
+            // The chooser takes the item plus the header callbacks; the entry takes the item and the
+            // callbacks holder, re-creates the item and calls the chooser.
+            MethodData chooser = null;
+            for (MethodData md : found) {
+                int fns = 0;
+                for (String p : md.getParamTypeNames()) if ("kotlin.jvm.functions.Function0".equals(p)) fns++;
+                if (fns >= 3) { chooser = md; break; }
+            }
+            if (chooser == null) { diag("(IE|InboxFolders) header chooser not found (" + found.size() + " candidates)"); return; }
+            Method chooserMethod = chooser.getMethodInstance(loader);
+            Class<?> headerType = null;
+            int headerArg = -1;
+            Class<?>[] cp = chooserMethod.getParameterTypes();
+            for (int i = 0; i < cp.length; i++) {
+                if (cp[i].getName().startsWith("X.") && headerConstructor(cp[i]) != null) { headerType = cp[i]; headerArg = i; break; }
+            }
+            if (headerType == null) { diag("(IE|InboxFolders) header chooser has no header item parameter"); return; }
+
+            List<Method> gates = new ArrayList<>();
+            for (MethodData inv : chooser.getInvokes()) {
+                List<String> p = inv.getParamTypeNames();
+                if (!Modifier.isStatic(inv.getModifiers()) || !"boolean".equals(inv.getReturnTypeName()) || p.size() != 2
+                        || !"com.instagram.common.session.UserSession".equals(p.get(0)) || !"boolean".equals(p.get(1))) continue;
+                gates.add(inv.getMethodInstance(loader));
+            }
+            if (gates.isEmpty()) { diag("(IE|InboxFolders) header style gate not found"); return; }
+
+            final Class<?> itemType = headerType;
+            for (MethodData md : found) {
+                if (md == chooser || !md.getParamTypeNames().contains(itemType.getName())) continue;
+                XposedBridge.hookMethod(md.getMethodInstance(loader), new XC_MethodHook() {
+                    @Override protected void beforeHookedMethod(MethodHookParam param) {
+                        Object ours = builtHeader;
+                        boolean mine = false;
+                        if (ours != null && param.args != null) for (Object a : param.args) if (a == ours) { mine = true; break; }
+                        IN_HEADER_ENTRY.get().push(mine);
+                    }
+
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        java.util.ArrayDeque<Boolean> s = IN_HEADER_ENTRY.get();
+                        if (!s.isEmpty()) s.pop();
+                    }
+                });
+            }
+            XposedBridge.hookAllConstructors(itemType, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (Boolean.TRUE.equals(IN_HEADER_ENTRY.get().peek()) && !BUILDING.get()) drawnHeaderRef = new WeakReference<>(param.thisObject);
+                }
+            });
+            final int itemArg = headerArg;
+            XposedBridge.hookMethod(chooserMethod, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    Object item = param.args[itemArg];
+                    boolean ours = FeatureFlags.hideDirectFoldersBar && item != null
+                            && (item == drawnHeaderRef.get() || item == builtHeader);
+                    DRAWING_OUR_HEADER.get().push(ours);
+                }
+
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    java.util.ArrayDeque<Boolean> s = DRAWING_OUR_HEADER.get();
+                    if (!s.isEmpty()) s.pop();
+                }
+            });
+            for (Method gate : gates) {
+                XposedBridge.hookMethod(gate, new XC_MethodHook() {
+                    @Override protected void beforeHookedMethod(MethodHookParam param) {
+                        Boolean ours = DRAWING_OUR_HEADER.get().peek();
+                        if (ours == null || !ours) return;
+                        param.setResult(false);
+                        if (!gateLogged) { gateLogged = true; diag("(IE|InboxFolders) header drawn as default (Messages / Requests)"); }
+                    }
+                });
+            }
+            diag("(IE|InboxFolders) header style hooked: " + chooserMethod.getDeclaringClass().getName() + "#"
+                    + chooserMethod.getName() + " gates=" + gates.size());
+        } catch (Throwable t) {
+            diag("(IE|InboxFolders) header style hook failed: " + t);
+        }
+    }
+
     // ── Hide folders bar: show Instagram's own "Messages / Requests" header instead ──
     // A personal account gets the INBOX_HEADER section ("Messages" + "Requests"); a professional
     // one gets the folder tabs (Primary / General / Requests: the FILTER_ROW section on IG
@@ -419,9 +520,9 @@ public class InboxFoldersHook {
         Class<?>[] types = ctor.getParameterTypes();
         Object[] args = new Object[types.length];
         // The values Instagram itself passes for a personal account's inbox (seen on IG 385713116:
-        // [DEFAULT, "Messages", "Inbox", 0, false]). The Strings are keys, not labels: the second one
-        // names the folder, and "Requests" there turns it into the Requests folder header
-        // ("Most recent ⌄" sort + "Hidden requests"). Not translated, like Instagram's own.
+        // [DEFAULT, "Messages", "Inbox", 0, false]): title, button label, request count, filtering
+        // flag. The UI re-creates the item with its own translated "Requests" label and count; which
+        // header it draws is decided there (see installHeaderStyleHooks).
         String[] keys = {"Messages", "Inbox"};
         int str = 0;
         for (int i = 0; i < types.length; i++) {
@@ -521,7 +622,7 @@ public class InboxFoldersHook {
     }
 
     private static final ThreadLocal<Boolean> BUILDING = ThreadLocal.withInitial(() -> Boolean.FALSE);
-    private static volatile boolean spyInstalled, rewriteLogged;
+    private static volatile boolean spyInstalled;
     private static final java.util.Set<String> spied = java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>());
 
     /** Records the arguments Instagram itself builds this header with (e.g. in the Requests folder or
@@ -530,26 +631,7 @@ public class InboxFoldersHook {
         if (spyInstalled) return;
         spyInstalled = true;
         try {
-            int keyIndex = -1, strings = 0;
-            Class<?>[] types = ctor.getParameterTypes();
-            for (int i = 0; i < types.length; i++)
-                if (types[i] == String.class && ++strings == 2) { keyIndex = i; break; }
-            final int folderKey = keyIndex;
             XposedBridge.hookMethod(ctor, new XC_MethodHook() {
-                /**
-                 * The inbox UI (Compose, X.0DXE.A00 on IG 385713116) re-creates the header it draws,
-                 * and on a professional account it uses the "Requests" folder key: the Requests
-                 * folder look ("Most recent ⌄" + "Hidden requests"). While the module replaces the
-                 * folders bar, give it the main inbox key Instagram uses for personal accounts.
-                 */
-                @Override protected void beforeHookedMethod(MethodHookParam param) {
-                    if (BUILDING.get() || folderKey < 0 || !FeatureFlags.hideDirectFoldersBar
-                            || builtHeader == null) return;
-                    if (!"Requests".equals(param.args[folderKey])) return;
-                    param.args[folderKey] = "Inbox";
-                    if (!rewriteLogged) { rewriteLogged = true; diag("(IE|InboxFolders) drawn header key Requests -> Inbox"); }
-                }
-
                 @Override protected void afterHookedMethod(MethodHookParam param) {
                     if (BUILDING.get() || spied.size() >= 8) return;
                     String args = java.util.Arrays.toString(param.args);
