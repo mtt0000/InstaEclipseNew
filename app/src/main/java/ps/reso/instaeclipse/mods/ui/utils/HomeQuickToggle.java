@@ -214,31 +214,116 @@ public final class HomeQuickToggle {
 
     // ── the shortcut ──
 
-    /** Applies the set, or restores what it replaced. Vibration is done by the gesture binder. */
+    /**
+     * Applies the set, or restores what it replaced. Vibration is done by the gesture binder. A
+     * switch changed by hand while the set was applied is a conflict: a dialog asks, per switch,
+     * whether it goes back to its previous value or keeps the user's choice.
+     */
     public static synchronized void toggle(Activity activity) {
-        boolean airplaneBefore = FeatureFlags.airplaneMode;
         if (!FeatureFlags.homeToggleActive) {
-            Map<String, Boolean> p = profile();
-            Map<String, Boolean> snapshot = applySwitches(p);
-            Boolean cleanUi = p.get(CLEAN_UI);
-            // Clean UI last: it turns some of the module's buttons off and remembers them itself.
-            if (cleanUi != null) {
-                snapshot.put(CLEAN_UI, FeatureFlags.isCleanUiActive);
-                if (cleanUi != FeatureFlags.isCleanUiActive) CleanUiManager.toggleCleanUi(activity, true);
-            }
-            FeatureFlags.homeToggleSnapshot = format(snapshot);
-            FeatureFlags.homeToggleActive = true;
-        } else {
-            Map<String, Boolean> snapshot = parse(FeatureFlags.homeToggleSnapshot);
-            // Reverse order: Clean UI gives its buttons back first, then the switches go back.
-            Boolean cleanUi = snapshot.remove(CLEAN_UI);
-            if (cleanUi != null && cleanUi != FeatureFlags.isCleanUiActive) CleanUiManager.toggleCleanUi(activity, true);
-            applySwitches(snapshot);
-            FeatureFlags.homeToggleSnapshot = "";
-            FeatureFlags.homeToggleActive = false;
+            apply(activity);
+            return;
         }
+        Map<String, Boolean> snapshot = parse(FeatureFlags.homeToggleSnapshot);
+        java.util.List<String> conflicts = conflicts(snapshot, parse(FeatureFlags.homeToggleApplied));
+        if (conflicts.isEmpty() || activity == null) restore(activity, snapshot);
+        else askAboutConflicts(activity, snapshot, conflicts);
+    }
+
+    private static void apply(Activity activity) {
+        boolean airplaneBefore = FeatureFlags.airplaneMode;
+        Map<String, Boolean> p = profile();
+        Map<String, Boolean> snapshot = applySwitches(p);
+        Map<String, Boolean> applied = new LinkedHashMap<>();
+        for (String k : snapshot.keySet()) applied.put(k, p.get(k));
+        Boolean cleanUi = p.get(CLEAN_UI);
+        // Clean UI last: it turns some of the module's buttons off and remembers them itself.
+        if (cleanUi != null) {
+            snapshot.put(CLEAN_UI, FeatureFlags.isCleanUiActive);
+            applied.put(CLEAN_UI, cleanUi);
+            if (cleanUi != FeatureFlags.isCleanUiActive) CleanUiManager.toggleCleanUi(activity, true);
+        }
+        FeatureFlags.homeToggleSnapshot = format(snapshot);
+        FeatureFlags.homeToggleApplied = format(applied);
+        FeatureFlags.homeToggleActive = true;
         SettingsManager.saveAllFlags();
         refresh(activity, airplaneBefore != FeatureFlags.airplaneMode);
+    }
+
+    /** Puts back the values in {@code snapshot} (a conflict the user chose to keep is left out). */
+    private static synchronized void restore(Activity activity, Map<String, Boolean> snapshot) {
+        boolean airplaneBefore = FeatureFlags.airplaneMode;
+        Map<String, Boolean> values = new LinkedHashMap<>(snapshot);
+        // Reverse order: Clean UI gives its buttons back first, then the switches go back.
+        Boolean cleanUi = values.remove(CLEAN_UI);
+        if (cleanUi != null && cleanUi != FeatureFlags.isCleanUiActive) CleanUiManager.toggleCleanUi(activity, true);
+        applySwitches(values);
+        FeatureFlags.homeToggleSnapshot = "";
+        FeatureFlags.homeToggleApplied = "";
+        FeatureFlags.homeToggleActive = false;
+        SettingsManager.saveAllFlags();
+        refresh(activity, airplaneBefore != FeatureFlags.airplaneMode);
+    }
+
+    /** Switches whose current value is no longer the one the shortcut applied (changed by hand). */
+    static java.util.List<String> conflicts(Map<String, Boolean> snapshot, Map<String, Boolean> applied) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String key : snapshot.keySet()) {
+            Boolean target = applied.get(key);
+            Boolean now = current(key);
+            if (target != null && now != null && !now.equals(target)) out.add(key);
+        }
+        return out;
+    }
+
+    static Boolean current(String key) {
+        if (CLEAN_UI.equals(key)) return FeatureFlags.isCleanUiActive;
+        Field f = booleanFlag(key);
+        try {
+            return f != null ? f.getBoolean(null) : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** One check box per changed switch, ticked = back to the previous value. Cancel keeps the
+     *  shortcut applied and changes nothing. */
+    private static void askAboutConflicts(Activity activity, Map<String, Boolean> snapshot, java.util.List<String> conflicts) {
+        try {
+            ps.reso.instaeclipse.utils.dialog.IeDialog dialog = new ps.reso.instaeclipse.utils.dialog.IeDialog(activity)
+                    .title(t(activity, R.string.ig_home_toggle_conflict_title))
+                    .message(t(activity, R.string.ig_home_toggle_conflict_hint));
+            Map<String, android.widget.CheckBox> boxes = new LinkedHashMap<>();
+            for (String key : conflicts) {
+                Boolean before = snapshot.get(key), now = current(key);
+                String text = t(activity, R.string.ig_home_toggle_conflict_item, t(activity, labelOf(key)),
+                        onOff(activity, Boolean.TRUE.equals(before)), onOff(activity, Boolean.TRUE.equals(now)));
+                boxes.put(key, dialog.checkBox(text, true));
+            }
+            dialog.primary(t(activity, R.string.ig_home_toggle_conflict_confirm), () -> {
+                Map<String, Boolean> values = new LinkedHashMap<>(snapshot);
+                for (Map.Entry<String, android.widget.CheckBox> e : boxes.entrySet())
+                    if (!e.getValue().isChecked()) values.remove(e.getKey()); // keep the user's choice
+                restore(activity, values);
+            });
+            dialog.secondary(activity.getString(android.R.string.cancel), null);
+            dialog.show();
+        } catch (Throwable t) {
+            ModuleLog.line("(IE|HomeToggle) conflict dialog: " + t);
+        }
+    }
+
+    private static String onOff(Activity a, boolean on) {
+        return t(a, on ? R.string.ig_home_toggle_value_on : R.string.ig_home_toggle_value_off);
+    }
+
+    private static String t(Activity a, int res, Object... args) {
+        return ps.reso.instaeclipse.utils.i18n.I18n.t(a, res, args);
+    }
+
+    static int labelOf(String key) {
+        for (Group g : GROUPS) for (Item item : g.items) if (item.flag.equals(key)) return item.labelRes;
+        return R.string.ig_home_toggle_title;
     }
 
     /** Sets each switch (CLEAN_UI aside) and returns the values it replaced. Pure FeatureFlags work. */

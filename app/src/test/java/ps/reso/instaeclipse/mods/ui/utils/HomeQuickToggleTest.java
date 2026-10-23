@@ -23,6 +23,7 @@ public class HomeQuickToggleTest {
         FeatureFlags.isGhostSeen = false;
         FeatureFlags.disableReels = false;
         FeatureFlags.enablePostDownload = false;
+        FeatureFlags.isCleanUiActive = false;
     }
 
     @Test public void everyItemIsABooleanSwitchListedOnce() {
@@ -70,5 +71,30 @@ public class HomeQuickToggleTest {
         assertFalse(FeatureFlags.isGhostSeen);
         assertFalse(FeatureFlags.disableReels);
         assertTrue(FeatureFlags.enablePostDownload);
+    }
+
+    @Test public void aSwitchChangedByHandWhileAppliedIsAConflict() {
+        // applied: Ghost seen ON, Reels off ON, Clean UI ON; before they were all OFF
+        Map<String, Boolean> before = HomeQuickToggle.parse("isGhostSeen:0,disableReels:0,cleanUi:0");
+        Map<String, Boolean> applied = HomeQuickToggle.parse("isGhostSeen:1,disableReels:1,cleanUi:1");
+        FeatureFlags.isGhostSeen = true;   // untouched since
+        FeatureFlags.disableReels = false; // turned back off by hand
+        FeatureFlags.isCleanUiActive = true;
+        assertEquals(java.util.List.of("disableReels"), HomeQuickToggle.conflicts(before, applied));
+
+        FeatureFlags.isCleanUiActive = false; // Clean UI turned off meanwhile
+        assertEquals(java.util.List.of("disableReels", HomeQuickToggle.CLEAN_UI), HomeQuickToggle.conflicts(before, applied));
+    }
+
+    @Test public void nothingAppliedRecordedMeansNoConflict() {
+        // a set applied by the previous build has no "applied" record: restore as before, no dialog
+        FeatureFlags.isGhostSeen = true;
+        assertTrue(HomeQuickToggle.conflicts(HomeQuickToggle.parse("isGhostSeen:0"), HomeQuickToggle.parse("")).isEmpty());
+    }
+
+    @Test public void everyItemHasItsOwnLabel() {
+        for (HomeQuickToggle.Group g : HomeQuickToggle.GROUPS)
+            for (HomeQuickToggle.Item item : g.items)
+                assertEquals(item.labelRes, HomeQuickToggle.labelOf(item.flag));
     }
 }

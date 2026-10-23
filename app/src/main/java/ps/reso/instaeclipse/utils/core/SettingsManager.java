@@ -338,6 +338,7 @@ public class SettingsManager {
         FeatureFlags.homeToggleProfile = prefs.getString("homeToggleProfile", "");
         FeatureFlags.homeToggleActive = prefs.getBoolean("homeToggleActive", false);
         FeatureFlags.homeToggleSnapshot = prefs.getString("homeToggleSnapshot", "");
+        FeatureFlags.homeToggleApplied = prefs.getString("homeToggleApplied", "");
         FeatureFlags.quickToggleSeen = prefs.getBoolean("quickToggleSeen", false);
         FeatureFlags.quickToggleTyping = prefs.getBoolean("quickToggleTyping", false);
         FeatureFlags.quickToggleScreenshot = prefs.getBoolean("quickToggleScreenshot", false);

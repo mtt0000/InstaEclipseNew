@@ -112,6 +112,7 @@ public class FeatureFlags {
     public static volatile String homeToggleProfile = "";
     public static volatile boolean homeToggleActive = false;   // the set is applied right now
     public static volatile String homeToggleSnapshot = "";     // the values it replaced, restored on the next use
+    public static volatile String homeToggleApplied = "";      // the values it set: a switch no longer at its value was changed by hand
 
     // Which ghost mode features the quick toggle will control
     public static volatile boolean quickToggleSeen = false;

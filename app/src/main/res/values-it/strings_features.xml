@@ -65,4 +65,10 @@
     <string name="ig_home_toggle_state_disable">Disattiva</string>
     <string name="ig_home_toggle_group_ui">Interfaccia</string>
     <string name="ig_home_toggle_clean_ui">Nascondi i pulsanti di InstaEclipse (Clean UI)</string>
+    <string name="ig_home_toggle_conflict_title">Ripristino impostazioni</string>
+    <string name="ig_home_toggle_conflict_hint">Hai cambiato queste impostazioni mentre la scorciatoia Home era applicata. Quelle spuntate tornano al valore precedente, quelle non spuntate mantengono la tua scelta. Tutto il resto viene ripristinato come sempre.</string>
+    <string name="ig_home_toggle_conflict_item">%1$s: torna a %2$s (ora %3$s)</string>
+    <string name="ig_home_toggle_conflict_confirm">Conferma</string>
+    <string name="ig_home_toggle_value_on">ON</string>
+    <string name="ig_home_toggle_value_off">OFF</string>
 </resources>

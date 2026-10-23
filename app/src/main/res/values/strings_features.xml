@@ -65,4 +65,10 @@
     <string name="ig_home_toggle_state_disable">Turn off</string>
     <string name="ig_home_toggle_group_ui">Interface</string>
     <string name="ig_home_toggle_clean_ui">Hide InstaEclipse buttons (Clean UI)</string>
+    <string name="ig_home_toggle_conflict_title">Restore settings</string>
+    <string name="ig_home_toggle_conflict_hint">You changed these settings while the Home shortcut was applied. Ticked ones go back to their previous value, unticked ones keep your choice. Everything else is restored as usual.</string>
+    <string name="ig_home_toggle_conflict_item">%1$s: back to %2$s (now %3$s)</string>
+    <string name="ig_home_toggle_conflict_confirm">Confirm</string>
+    <string name="ig_home_toggle_value_on">ON</string>
+    <string name="ig_home_toggle_value_off">OFF</string>
 </resources>
