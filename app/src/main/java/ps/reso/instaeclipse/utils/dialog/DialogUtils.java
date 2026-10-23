@@ -1375,9 +1375,51 @@ public class DialogUtils {
                         v -> showNavShortcutDialog(context, (TextView) findFirstText(v), R.string.nav_shortcut_direct)),
                 createActionRow(context, R.drawable.ic_home, navShortcutLabel(context, R.string.nav_shortcut_home,
                                 FeatureFlags.cleanUiToggleGesture), "#30D158",
-                        v -> showNavShortcutDialog(context, (TextView) findFirstText(v), R.string.nav_shortcut_home))));
+                        v -> showNavShortcutDialog(context, (TextView) findFirstText(v), R.string.nav_shortcut_home)),
+                createActionRow(context, R.drawable.ic_tune, I18n.t(context, R.string.ig_home_toggle_title) + "  ·  "
+                                + I18n.t(context, R.string.ig_home_toggle_count, ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.profile().size()),
+                        "#30D158", v -> showHomeToggleOptions(context))));
 
         showSectionDialog(context, I18n.t(context, R.string.menu_navigation), layout, () -> {});
+    }
+
+    /** What the Home shortcut applies: every switch, grouped, each Not included / Turn on / Turn off
+     *  (tap cycles). Saved at once; see HomeQuickToggle. */
+    private static void showHomeToggleOptions(Context context) {
+        LinearLayout layout = createSwitchLayout(context);
+        TextView hint = new TextView(context);
+        hint.setText(I18n.t(context, R.string.ig_home_toggle_hint)
+                + (ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.isActive()
+                ? "\n\n" + I18n.t(context, R.string.ig_home_toggle_active_note) : ""));
+        hint.setTextColor(C_TEXT2);
+        hint.setTextSize(13);
+        hint.setPadding(dp(context, 4), 0, dp(context, 4), dp(context, 8));
+        layout.addView(hint);
+
+        java.util.Map<String, Boolean> profile = ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.profile();
+        for (ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.Group g : ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.GROUPS) {
+            layout.addView(sectionHeader(context, I18n.t(context, g.titleRes)));
+            View[] rows = new View[g.items.length];
+            for (int i = 0; i < g.items.length; i++) {
+                ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.Item item = g.items[i];
+                rows[i] = createActionRow(context, g.iconRes, homeToggleLabel(context, item, profile.get(item.flag)), "#30D158", v -> {
+                    Boolean current = ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.profile().get(item.flag);
+                    // Not included -> Turn on -> Turn off -> Not included
+                    Boolean next = current == null ? Boolean.TRUE : current ? Boolean.FALSE : null;
+                    ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.setTarget(item.flag, next);
+                    View label = findFirstText(v);
+                    if (label instanceof TextView) ((TextView) label).setText(homeToggleLabel(context, item, next));
+                });
+            }
+            layout.addView(cardOf(context, rows));
+        }
+        showSectionDialog(context, I18n.t(context, R.string.ig_home_toggle_title), layout, () -> {});
+    }
+
+    private static String homeToggleLabel(Context context, ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.Item item, Boolean target) {
+        int state = target == null ? R.string.ig_home_toggle_state_off
+                : target ? R.string.ig_home_toggle_state_enable : R.string.ig_home_toggle_state_disable;
+        return I18n.t(context, item.labelRes) + "  ·  " + I18n.t(context, state);
     }
 
     /** Secret menu has no "Off" (it is the only way in): 0 = long press, 1 = 2 taps + long press. */
