@@ -37,6 +37,7 @@ public class SettingsBackupManager {
         s.put("secretMenuDoubleTap",     FeatureFlags.secretMenuDoubleTap);
         s.put("isCleanUiActive",         FeatureFlags.isCleanUiActive);
         s.put("cleanUiSavedSnapshot",    FeatureFlags.cleanUiSavedSnapshot);
+        s.put("homeToggleProfile",       FeatureFlags.homeToggleProfile);
         s.put("quickToggleSeen",         FeatureFlags.quickToggleSeen);
         s.put("quickToggleTyping",       FeatureFlags.quickToggleTyping);
         s.put("quickToggleScreenshot",   FeatureFlags.quickToggleScreenshot);
@@ -221,6 +222,7 @@ public class SettingsBackupManager {
         if (s.has("secretMenuDoubleTap"))    FeatureFlags.secretMenuDoubleTap    = s.getBoolean("secretMenuDoubleTap");
         if (s.has("isCleanUiActive"))        FeatureFlags.isCleanUiActive        = s.getBoolean("isCleanUiActive");
         if (s.has("cleanUiSavedSnapshot"))   FeatureFlags.cleanUiSavedSnapshot   = s.getString("cleanUiSavedSnapshot");
+        if (s.has("homeToggleProfile"))      FeatureFlags.homeToggleProfile      = s.getString("homeToggleProfile");
         if (s.has("quickToggleSeen"))        FeatureFlags.quickToggleSeen        = s.getBoolean("quickToggleSeen");
         if (s.has("quickToggleTyping"))      FeatureFlags.quickToggleTyping      = s.getBoolean("quickToggleTyping");
         if (s.has("quickToggleScreenshot"))  FeatureFlags.quickToggleScreenshot  = s.getBoolean("quickToggleScreenshot");

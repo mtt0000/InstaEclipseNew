@@ -107,6 +107,11 @@ public class CleanUiManager {
     }
 
     public static synchronized void toggleCleanUi(Activity activity) {
+        toggleCleanUi(activity, false);
+    }
+
+    /** {@code silent}: no toast (the Home shortcut confirms with a vibration only). */
+    public static synchronized void toggleCleanUi(Activity activity, boolean silent) {
         if (!FeatureFlags.isCleanUiActive) {
             // Take snapshot and set all to false
             try {
@@ -137,7 +142,7 @@ public class CleanUiManager {
 
                 FeatureFlags.isCleanUiActive = true;
 
-                IeToast.makeText(activity, I18n.t(activity, R.string.clean_ui_toast_on), Toast.LENGTH_SHORT).show();
+                if (!silent) IeToast.makeText(activity, I18n.t(activity, R.string.clean_ui_toast_on), Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 ModuleLog.line("(InstaEclipse|CleanUI) Failed to create snapshot: " + e.getMessage());
             }
@@ -178,7 +183,7 @@ public class CleanUiManager {
                 FeatureFlags.cleanUiSavedSnapshot = "";
                 FeatureFlags.isCleanUiActive = false;
 
-                IeToast.makeText(activity, I18n.t(activity, R.string.clean_ui_toast_off), Toast.LENGTH_SHORT).show();
+                if (!silent) IeToast.makeText(activity, I18n.t(activity, R.string.clean_ui_toast_off), Toast.LENGTH_SHORT).show();
             } catch (JSONException e) {
                 ModuleLog.line("(InstaEclipse|CleanUI) Failed to parse snapshot: " + e.getMessage());
                 FeatureFlags.isCleanUiActive = false;

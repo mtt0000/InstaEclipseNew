@@ -335,6 +335,10 @@ public class SettingsManager {
         FeatureFlags.ghostToggleGesture = prefs.getInt("ghostToggleGesture", 1);
         FeatureFlags.isCleanUiActive = prefs.getBoolean("isCleanUiActive", false);
         FeatureFlags.cleanUiSavedSnapshot = prefs.getString("cleanUiSavedSnapshot", "");
+        FeatureFlags.homeToggleProfile = prefs.getString("homeToggleProfile", "");
+        FeatureFlags.homeToggleActive = prefs.getBoolean("homeToggleActive", false);
+        FeatureFlags.homeToggleSnapshot = prefs.getString("homeToggleSnapshot", "");
+        FeatureFlags.homeToggleApplied = prefs.getString("homeToggleApplied", "");
         FeatureFlags.quickToggleSeen = prefs.getBoolean("quickToggleSeen", false);
         FeatureFlags.quickToggleTyping = prefs.getBoolean("quickToggleTyping", false);
         FeatureFlags.quickToggleScreenshot = prefs.getBoolean("quickToggleScreenshot", false);
