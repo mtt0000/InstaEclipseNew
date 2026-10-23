@@ -1403,10 +1403,11 @@ public class DialogUtils {
             for (int i = 0; i < g.items.length; i++) {
                 ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.Item item = g.items[i];
                 rows[i] = createActionRow(context, g.iconRes, homeToggleLabel(context, item, profile.get(item.flag)), "#30D158", v -> {
-                    Boolean current = ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.profile().get(item.flag);
-                    // Not included -> Turn on -> Turn off -> Not included
-                    Boolean next = current == null ? Boolean.TRUE : current ? Boolean.FALSE : null;
-                    ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.setTarget(item.flag, next);
+                    // Not included -> Turn on -> Turn off -> Not included (same cycle as the companion app)
+                    FeatureFlags.homeToggleProfile = ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.cycled(
+                            FeatureFlags.homeToggleProfile, item.flag);
+                    SettingsManager.saveAllFlags();
+                    Boolean next = ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.profile().get(item.flag);
                     View label = findFirstText(v);
                     if (label instanceof TextView) ((TextView) label).setText(homeToggleLabel(context, item, next));
                 });

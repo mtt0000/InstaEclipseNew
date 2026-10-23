@@ -323,12 +323,17 @@ public class FeaturesFragment extends Fragment {
             }
         });
 
-        btnBack.setOnClickListener(v -> loadMainMenu());
+        btnBack.setOnClickListener(v -> {
+            if ("homeToggle".equals(currentMenu)) loadNavigationMenu();
+            else loadMainMenu();
+        });
 
         requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(), new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (!"main".equals(currentMenu)) {
+                if ("homeToggle".equals(currentMenu)) {
+                    loadNavigationMenu();
+                } else if (!"main".equals(currentMenu)) {
                     loadMainMenu();
                 } else if (isSearching()) {
                     // Back while searching clears the query (the watcher restores the main menu)
@@ -1344,11 +1349,54 @@ public class FeaturesFragment extends Fragment {
                         () -> showNavShortcutDialog(R.string.nav_shortcut_direct)),
                 createClickable(R.drawable.ic_home, "#30D158",
                         navShortcutLabel(R.string.nav_shortcut_home, localCache.getInt("cleanUiToggleGesture", 0)),
-                        () -> showNavShortcutDialog(R.string.nav_shortcut_home))
+                        () -> showNavShortcutDialog(R.string.nav_shortcut_home)),
+                createClickable(R.drawable.ic_tune, "#30D158",
+                        getString(R.string.ig_home_toggle_title) + "  ·  " + getString(R.string.ig_home_toggle_count,
+                                ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.profileOf(
+                                        localCache.getString("homeToggleProfile", "")).size()),
+                        this::loadHomeToggleMenu)
         ));
 
         return defs;
     }
+
+    /** What the Home shortcut applies (same list as Instagram's menu, see HomeQuickToggle): each row
+     *  cycles Not included / Turn on / Turn off and is sent to Instagram at once. */
+    private void loadHomeToggleMenu() {
+        showMenu(getString(R.string.ig_home_toggle_title), buildHomeToggleDefs());
+        currentMenu = "homeToggle";
+    }
+
+    private List<Object> buildHomeToggleDefs() {
+        List<Object> defs = new ArrayList<>();
+        java.util.Map<String, Boolean> profile = ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.profileOf(
+                localCache.getString("homeToggleProfile", ""));
+        for (ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.Group g : ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.GROUPS) {
+            defs.add(getString(g.titleRes));
+            List<FeatureItem> rows = new ArrayList<>();
+            for (ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.Item item : g.items) {
+                final FeatureItem[] row = new FeatureItem[1];
+                row[0] = createClickable(g.iconRes, "#30D158", homeToggleLabel(item, profile.get(item.flag)), () -> {
+                    String next = ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.cycled(
+                            localCache.getString("homeToggleProfile", ""), item.flag);
+                    putStringPref("homeToggleProfile", next);
+                    row[0].title = homeToggleLabel(item,
+                            ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.profileOf(next).get(item.flag));
+                    adapter.notifyDataSetChanged(); // keeps the scroll position, unlike rebuilding the menu
+                });
+                rows.add(row[0]);
+            }
+            defs.add(rows);
+        }
+        return defs;
+    }
+
+    private String homeToggleLabel(ps.reso.instaeclipse.mods.ui.utils.HomeQuickToggle.Item item, Boolean target) {
+        int state = target == null ? R.string.ig_home_toggle_state_off
+                : target ? R.string.ig_home_toggle_state_enable : R.string.ig_home_toggle_state_disable;
+        return getString(item.labelRes) + "  ·  " + getString(state);
+    }
+
 
     /** Off / Long press / 2 taps + long press, indexed like FeatureFlags' gesture ints. */
     private String[] navGestureNames() {

@@ -192,20 +192,25 @@ public final class HomeQuickToggle {
 
     /** The chosen set; empty means "Clean UI only" (the shortcut's behaviour before sets existed). */
     public static Map<String, Boolean> profile() {
-        Map<String, Boolean> p = parse(FeatureFlags.homeToggleProfile);
-        if (p.isEmpty() && (FeatureFlags.homeToggleProfile == null || FeatureFlags.homeToggleProfile.isEmpty()))
-            p.put(CLEAN_UI, Boolean.TRUE);
+        return profileOf(FeatureFlags.homeToggleProfile);
+    }
+
+    /** A stored set ("homeToggleProfile" value; the companion app reads its own copy). */
+    public static Map<String, Boolean> profileOf(String raw) {
+        Map<String, Boolean> p = parse(raw);
+        if (p.isEmpty() && (raw == null || raw.isEmpty())) p.put(CLEAN_UI, Boolean.TRUE);
         return p;
     }
 
-    /** Includes {@code flag} with {@code target} (on / off), or leaves it out when null; saved. */
-    public static void setTarget(String flag, Boolean target) {
-        Map<String, Boolean> p = profile();
-        if (target == null) p.remove(flag);
-        else p.put(flag, target);
+    /** {@code current} with {@code flag} moved to the next state: Not included -> Turn on -> Turn off. */
+    public static String cycled(String current, String flag) {
+        Map<String, Boolean> p = profileOf(current);
+        Boolean now = p.get(flag);
+        if (now == null) p.put(flag, Boolean.TRUE);
+        else if (now) p.put(flag, Boolean.FALSE);
+        else p.remove(flag);
         // An emptied set is stored as "none" so it doesn't fall back to "Clean UI only".
-        FeatureFlags.homeToggleProfile = p.isEmpty() ? "none" : format(p);
-        SettingsManager.saveAllFlags();
+        return p.isEmpty() ? "none" : format(p);
     }
 
     public static boolean isActive() {
@@ -369,7 +374,7 @@ public final class HomeQuickToggle {
 
     // ── "flag:1,flag:0" ──
 
-    static Map<String, Boolean> parse(String s) {
+    public static Map<String, Boolean> parse(String s) {
         Map<String, Boolean> out = new LinkedHashMap<>();
         if (s == null || s.isEmpty() || "none".equals(s)) return out;
         for (String part : s.split(",")) {
@@ -382,7 +387,7 @@ public final class HomeQuickToggle {
         return out;
     }
 
-    static String format(Map<String, Boolean> m) {
+    public static String format(Map<String, Boolean> m) {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, Boolean> e : m.entrySet()) {
             if (sb.length() > 0) sb.append(',');

@@ -97,4 +97,17 @@ public class HomeQuickToggleTest {
             for (HomeQuickToggle.Item item : g.items)
                 assertEquals(item.labelRes, HomeQuickToggle.labelOf(item.flag));
     }
+
+    @Test public void tappingARowCyclesNotIncludedOnOff() {
+        String s = HomeQuickToggle.cycled("", "isGhostSeen");      // default set: Clean UI only
+        assertEquals("cleanUi:1,isGhostSeen:1", s);
+        s = HomeQuickToggle.cycled(s, "isGhostSeen");
+        assertEquals("cleanUi:1,isGhostSeen:0", s);
+        s = HomeQuickToggle.cycled(s, "isGhostSeen");
+        assertEquals("cleanUi:1", s);
+        s = HomeQuickToggle.cycled(s, HomeQuickToggle.CLEAN_UI);  // Clean UI ON -> OFF
+        s = HomeQuickToggle.cycled(s, HomeQuickToggle.CLEAN_UI);  // OFF -> not included: empty set
+        assertEquals("none", s);
+        assertTrue(HomeQuickToggle.profileOf(s).isEmpty());
+    }
 }
