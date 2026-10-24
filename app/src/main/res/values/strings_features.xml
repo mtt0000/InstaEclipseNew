@@ -87,4 +87,6 @@
     <string name="ie_chat_header_menu">⋮ menu in the chat header</string>
     <string name="ie_lock_collections_button">🔒 button on saved collections</string>
     <string name="ie_post_counts_menu">\"Edit counts\" in the post menu</string>
+    <string name="profiles_reorder">Drag to reorder</string>
+    <string name="profiles_reorder_hold">hold and drag to reorder</string>
 </resources>

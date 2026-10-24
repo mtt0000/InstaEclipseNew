@@ -41,6 +41,8 @@ import ps.reso.instaeclipse.mods.ui.UIHookManager;
 import ps.reso.instaeclipse.mods.ui.utils.InjectedUi;
 import ps.reso.instaeclipse.mods.ui.utils.ProfileManager;
 import ps.reso.instaeclipse.utils.toast.IeToast;
+import java.util.ArrayList;
+import java.util.List;
 import ps.reso.instaeclipse.utils.core.ModuleActivityLauncher;
 import ps.reso.instaeclipse.utils.core.SettingsManager;
 import ps.reso.instaeclipse.utils.feature.FeatureFlags;
@@ -2930,12 +2932,24 @@ public class DialogUtils {
 
         layout.addView(sectionHeader(context, I18n.t(context, R.string.profiles_list)));
         LinearLayout list = card(context);
+        // Profile rows in their own box, so dragging one by its handle only moves among them.
+        LinearLayout rows = new LinearLayout(context);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        List<String> ids = new ArrayList<>();
         for (ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile pr : store.list()) {
             boolean on = active != null && pr.id.equals(active.id);
-            list.addView(createActionRow(context, on ? R.drawable.ic_check_circle : R.drawable.ic_tune,
+            View row = createActionRow(context, on ? R.drawable.ic_check_circle : R.drawable.ic_tune,
                     on ? I18n.t(context, R.string.profiles_active_row, pr.name) : pr.name,
-                    on ? "#30D158" : "#8E8E93", v -> showProfileActions(context, pr.id)));
+                    on ? "#30D158" : "#8E8E93", v -> showProfileActions(context, pr.id));
+            rows.addView(row);
+            ids.add(pr.id);
         }
+        if (ids.size() > 1) makeReorderable(context, rows, ids, order -> {
+            ps.reso.instaeclipse.utils.core.SettingsProfiles p = ProfileManager.store();
+            if (p.reorder(order)) ProfileManager.save(p);
+            showSettingsProfiles(context);
+        });
+        list.addView(rows);
         list.addView(createActionRow(context, R.drawable.ic_save, I18n.t(context, R.string.profiles_new), "#0A84FF",
                 v -> promptProfileName(context, I18n.t(context, R.string.profiles_new),
                         store.uniqueName(I18n.t(context, R.string.profiles_default_name, store.list().size() + 1)), name -> {
@@ -2953,6 +2967,72 @@ public class DialogUtils {
                 flagSwitch(context, R.drawable.ic_notification, "#30D158", R.string.profiles_confirm_name, "profileSwitchShowName")));
 
         showSectionDialog(context, I18n.t(context, R.string.profiles_title), layout, () -> {});
+    }
+
+    /**
+     * Drag & drop for the rows of {@code box} (one per id): each gets a ≡ handle; dragging it moves
+     * the row (the others make room) and on release {@code onOrder} gets the ids in their new order.
+     * The rows stay where they are in the layout until then (removing a row mid-gesture would end it).
+     */
+    private static void makeReorderable(Context context, LinearLayout box, List<String> ids,
+                                        java.util.function.Consumer<List<String>> onOrder) {
+        final int n = box.getChildCount();
+        final int[] from = {-1}, to = {-1};
+        final float[] startY = {0};
+        for (int i = 0; i < n; i++) {
+            View row = box.getChildAt(i);
+            if (!(row instanceof LinearLayout r)) continue;
+            TextView handle = new TextView(context);
+            handle.setText("≡");
+            handle.setTextSize(22);
+            handle.setTextColor(C_TEXT2);
+            handle.setGravity(Gravity.CENTER);
+            handle.setPadding(dp(context, 12), 0, dp(context, 4), 0);
+            handle.setContentDescription(I18n.t(context, R.string.profiles_reorder));
+            r.addView(handle, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT));
+            final int index = i;
+            handle.setOnTouchListener((v, e) -> {
+                float h = Math.max(1, row.getHeight());
+                switch (e.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        from[0] = to[0] = index;
+                        startY[0] = e.getRawY();
+                        v.getParent().requestDisallowInterceptTouchEvent(true); // the menu mustn't scroll
+                        row.setElevation(dp(context, 6));
+                        row.setAlpha(0.85f);
+                        return true;
+                    case android.view.MotionEvent.ACTION_MOVE: {
+                        if (from[0] < 0) return true;
+                        float dy = Math.max(-from[0] * h, Math.min((n - 1 - from[0]) * h, e.getRawY() - startY[0]));
+                        row.setTranslationY(dy);
+                        to[0] = Math.max(0, Math.min(n - 1, from[0] + Math.round(dy / h)));
+                        for (int j = 0; j < n; j++) {
+                            if (j == from[0]) continue;
+                            float shift = from[0] < to[0] && j > from[0] && j <= to[0] ? -h
+                                    : to[0] < from[0] && j >= to[0] && j < from[0] ? h : 0;
+                            box.getChildAt(j).setTranslationY(shift);
+                        }
+                        return true;
+                    }
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL: {
+                        for (int j = 0; j < n; j++) box.getChildAt(j).setTranslationY(0);
+                        row.setElevation(0);
+                        row.setAlpha(1f);
+                        int a = from[0], b = to[0];
+                        from[0] = to[0] = -1;
+                        if (a >= 0 && b >= 0 && a != b && e.getActionMasked() == android.view.MotionEvent.ACTION_UP) {
+                            List<String> order = new ArrayList<>(ids);
+                            order.add(b, order.remove(a));
+                            onOrder.accept(order);
+                        }
+                        return true;
+                    }
+                    default:
+                        return true;
+                }
+            });
+        }
     }
 
     private static void showProfileActions(Context context, String id) {

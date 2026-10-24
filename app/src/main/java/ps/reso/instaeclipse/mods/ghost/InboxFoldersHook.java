@@ -346,6 +346,49 @@ public class InboxFoldersHook {
     /** The item Instagram's UI re-created from ours (it rebuilds it with its own label and count). */
     private static volatile WeakReference<Object> drawnHeaderRef = new WeakReference<>(null);
     private static volatile boolean gateLogged;
+    /** The header can be drawn the personal-account way; else the bar is only hidden and a plain
+     *  "Messages" title takes its place (FoldersHeaderFallback). */
+    private static volatile boolean headerStyleReady;
+
+    /** True while the folders bar is hidden and Instagram's header can't take its place. */
+    public static boolean needsTextFallback() {
+        return FeatureFlags.hideDirectFoldersBar && barSlot != null && !headerSectionSeen
+                && (!headerStyleReady || headerUnavailable);
+    }
+
+    /** No header item could be built for the bar's slot on this build. */
+    private static volatile boolean headerUnavailable;
+
+    /**
+     * A main-inbox header item: its folder key is "Inbox" (what Instagram passes for a personal
+     * account's inbox, and what ours carries) and none of its modes is a requests / spam one. The
+     * Requests folder's header has another key, so it keeps its own look.
+     */
+    static boolean isMainInboxHeader(Object item) {
+        boolean inbox = false;
+        for (Class<?> c = item.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                try {
+                    f.setAccessible(true);
+                    Object v = f.get(item);
+                    if ("Inbox".equals(v)) inbox = true;
+                    else if (v instanceof Enum<?> e && enumScore(e.name()) < 0) return false;
+                } catch (Throwable ignored) {}
+            }
+        }
+        return inbox;
+    }
+
+    private static final java.util.Set<String> chooserTraced = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    /** The header items the chooser draws (a few distinct ones) and whether they count as ours. */
+    private static void traceChooser(Object item, boolean ours) {
+        if (chooserTraced.size() >= 6) return;
+        String line = "ours=" + ours + " item=" + describe(item, 0);
+        if (line.length() > 600) line = line.substring(0, 600) + "…";
+        if (chooserTraced.add(line)) diag("(IE|InboxFolders) CHOOSER " + line);
+    }
 
     private void installHeaderStyleHooks(DexKitBridge bridge, ClassLoader loader) {
         try {
@@ -404,8 +447,11 @@ public class InboxFoldersHook {
             XposedBridge.hookMethod(chooserMethod, new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam param) {
                     Object item = param.args[itemArg];
+                    // Ours, or the copy Instagram's UI made of it (a new object with the same content,
+                    // which the identity checks alone missed: the sort header stayed).
                     boolean ours = FeatureFlags.hideDirectFoldersBar && item != null
-                            && (item == drawnHeaderRef.get() || item == builtHeader);
+                            && (item == drawnHeaderRef.get() || item == builtHeader || isMainInboxHeader(item));
+                    traceChooser(item, ours);
                     DRAWING_OUR_HEADER.get().push(ours);
                 }
 
@@ -424,6 +470,7 @@ public class InboxFoldersHook {
                     }
                 });
             }
+            headerStyleReady = true;
             diag("(IE|InboxFolders) header style hooked: " + chooserMethod.getDeclaringClass().getName() + "#"
                     + chooserMethod.getName() + " gates=" + gates.size());
         } catch (Throwable t) {
@@ -524,7 +571,9 @@ public class InboxFoldersHook {
             case "FILTER_ROW": {
                 if (barSlot == null) barSlot = sec;
                 Object header = null;
-                if (sec.equals(barSlot) && !headerSectionSeen) {
+                // Without the style hook Instagram would draw the professional sort header
+                // ("Most recent ⌄ … Hidden requests"): only hide the bar, the text fallback shows.
+                if (sec.equals(barSlot) && !headerSectionSeen && headerStyleReady) {
                     Object headerGen = headerGenerator();
                     if (!dumpLogged) { dumpLogged = true; dump(sec, headerGen, param.getResult()); }
                     if (headerGen != null) header = buildHeader(headerGen, state);
@@ -534,6 +583,7 @@ public class InboxFoldersHook {
                         header = null;
                     }
                 }
+                if (sec.equals(barSlot) && !headerSectionSeen) headerUnavailable = header == null;
                 param.setResult(header); // null = just hide the bar
                 break;
             }
@@ -812,6 +862,8 @@ public class InboxFoldersHook {
         out.append("hideDirectFoldersBar=").append(FeatureFlags.hideDirectFoldersBar)
                 .append(" barSlot=").append(barSlot)
                 .append(" headerSectionSeen=").append(headerSectionSeen)
+                .append(" headerStyleReady=").append(headerStyleReady)
+                .append(" textFallback=").append(needsTextFallback())
                 .append(" holders=").append(holdersRef.get() != null)
                 .append(" builtHeader=").append(builtHeader != null ? builtHeader.getClass().getName() : "null")
                 .append('\n');

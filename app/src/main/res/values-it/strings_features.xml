@@ -87,4 +87,6 @@
     <string name="ie_chat_header_menu">Menu ⋮ nell\'intestazione della chat</string>
     <string name="ie_lock_collections_button">Pulsante 🔒 sulle collezioni salvate</string>
     <string name="ie_post_counts_menu">Voce \"Modifica contatori\" nel menu dei post</string>
+    <string name="profiles_reorder">Trascina per riordinare</string>
+    <string name="profiles_reorder_hold">tieni premuto e trascina per riordinare</string>
 </resources>

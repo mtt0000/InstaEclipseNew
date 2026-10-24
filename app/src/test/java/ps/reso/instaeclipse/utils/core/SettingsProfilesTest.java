@@ -140,6 +140,21 @@ public class SettingsProfilesTest {
     }
 
     @Test
+    public void reorderChangesOrderAndNextProfile() {
+        SettingsProfiles p = SettingsProfiles.create("A");
+        p.add("B");
+        p.add("C");
+        assertTrue(p.reorder(java.util.Arrays.asList("p3", "p1")));
+        assertEquals("p3", p.list().get(0).id);
+        assertEquals("p1", p.list().get(1).id);
+        assertEquals("p2", p.list().get(2).id); // not listed: kept, after the others
+        assertEquals("p2", p.nextId());          // after the active one (p1) in the new order
+        assertFalse(p.reorder(java.util.Arrays.asList("p3", "p1", "p2")));
+        SettingsProfiles again = SettingsProfiles.parse(p.serialize());
+        assertEquals("p3", again.list().get(0).id);
+    }
+
+    @Test
     public void unreadableStoreIsEmpty() {
         assertTrue(SettingsProfiles.parse("").isEmpty());
         assertTrue(SettingsProfiles.parse("{not json").isEmpty());

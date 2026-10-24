@@ -195,6 +195,21 @@ public final class SettingsProfiles {
         return true;
     }
 
+    /** Puts the profiles in the order of {@code ids} (drag & drop); ones it doesn't list keep their
+     *  relative order after them. False if nothing moved. */
+    public boolean reorder(List<String> ids) {
+        List<Profile> out = new ArrayList<>();
+        for (String id : ids) {
+            Profile pr = get(id);
+            if (pr != null && !out.contains(pr)) out.add(pr);
+        }
+        for (Profile pr : list) if (!out.contains(pr)) out.add(pr);
+        if (out.equals(list)) return false;
+        list.clear();
+        list.addAll(out);
+        return true;
+    }
+
     /** False for the active profile and for the last one left. */
     public boolean delete(String id) {
         Profile pr = get(id);

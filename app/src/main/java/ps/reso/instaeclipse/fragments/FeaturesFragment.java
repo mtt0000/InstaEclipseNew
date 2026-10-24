@@ -271,6 +271,7 @@ public class FeaturesFragment extends Fragment {
         recyclerFeatures.setItemAnimator(null);
         adapter = new FeatureAdapter();
         recyclerFeatures.setAdapter(adapter);
+        attachProfileDrag();
 
         tvHeaderTitle = fragmentView.findViewById(R.id.tv_header_title);
         btnBack = fragmentView.findViewById(R.id.btn_back);
@@ -374,6 +375,8 @@ public class FeaturesFragment extends Fragment {
         public boolean isCategory;
         /** Sub-menu this main-menu row opens (used to recompute its count). */
         Category category;
+        /** Settings profile row: can be dragged (long press) to reorder the profiles. */
+        String profileId;
     }
 
     static class HeaderViewHolder extends RecyclerView.ViewHolder {
@@ -2503,8 +2506,10 @@ public class FeaturesFragment extends Fragment {
         List<FeatureItem> rows = new ArrayList<>();
         for (ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile pr : store.list()) {
             boolean on = active != null && pr.id.equals(active.id);
-            rows.add(createClickable(on ? R.drawable.ic_check_circle : R.drawable.ic_tune, on ? "#30D158" : "#8E8E93",
-                    on ? getString(R.string.profiles_active_row, pr.name) : pr.name, () -> showProfileActions(pr.id)));
+            FeatureItem row = createClickable(on ? R.drawable.ic_check_circle : R.drawable.ic_tune, on ? "#30D158" : "#8E8E93",
+                    on ? getString(R.string.profiles_active_row, pr.name) : pr.name, () -> showProfileActions(pr.id));
+            row.profileId = pr.id;
+            rows.add(row);
         }
         rows.add(createClickable(R.drawable.ic_save, "#0A84FF", getString(R.string.profiles_new), () ->
                 promptProfileName(getString(R.string.profiles_new),
@@ -2514,7 +2519,9 @@ public class FeaturesFragment extends Fragment {
                             saveProfileStore(p);
                             loadSettingsProfilesMenu();
                         })));
-        defs.add(getString(R.string.profiles_list));
+        defs.add(store.list().size() > 1
+                ? getString(R.string.profiles_list) + " · " + getString(R.string.profiles_reorder_hold)
+                : getString(R.string.profiles_list));
         defs.add(rows);
 
         defs.add(getString(R.string.profiles_confirm_section));
@@ -2522,6 +2529,49 @@ public class FeaturesFragment extends Fragment {
                 createSwitch(R.drawable.ic_notification, "#30D158", getString(R.string.profiles_confirm_vibrate), "profileSwitchVibrate"),
                 createSwitch(R.drawable.ic_notification, "#30D158", getString(R.string.profiles_confirm_name), "profileSwitchShowName")));
         return defs;
+    }
+
+    /** Long press and drag a profile row to reorder the profiles (only rows of that menu move). */
+    private void attachProfileDrag() {
+        new androidx.recyclerview.widget.ItemTouchHelper(new androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
+                androidx.recyclerview.widget.ItemTouchHelper.UP | androidx.recyclerview.widget.ItemTouchHelper.DOWN, 0) {
+            private boolean moved;
+
+            private boolean draggable(int pos) {
+                return "setprofiles".equals(currentMenu) && pos >= 0 && pos < adapter.items.size()
+                        && adapter.items.get(pos).profileId != null;
+            }
+
+            @Override
+            public int getMovementFlags(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh) {
+                return draggable(vh.getBindingAdapterPosition()) ? super.getMovementFlags(rv, vh) : 0;
+            }
+
+            @Override
+            public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh, @NonNull RecyclerView.ViewHolder target) {
+                int from = vh.getBindingAdapterPosition(), to = target.getBindingAdapterPosition();
+                if (!draggable(from) || !draggable(to)) return false;
+                java.util.Collections.swap(adapter.items, from, to);
+                adapter.notifyItemMoved(from, to);
+                moved = true;
+                return true;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int direction) {}
+
+            @Override
+            public void clearView(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh) {
+                super.clearView(rv, vh);
+                if (!moved) return;
+                moved = false;
+                List<String> order = new ArrayList<>();
+                for (FeatureItem item : adapter.items) if (item.profileId != null) order.add(item.profileId);
+                ps.reso.instaeclipse.utils.core.SettingsProfiles p = profileStore();
+                if (p.reorder(order)) saveProfileStore(p);
+                rv.post(FeaturesFragment.this::loadSettingsProfilesMenu); // redraw the rounded corners
+            }
+        }).attachToRecyclerView(recyclerFeatures);
     }
 
     private void showProfileActions(String id) {

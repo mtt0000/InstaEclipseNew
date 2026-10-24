@@ -159,6 +159,8 @@ public class UIHookManager {
         View root = activity.findViewById(android.R.id.content);
         if (root != null) {
             ps.reso.instaeclipse.mods.ghost.BatchHideChatsHook.attach(activity, root);
+            // Hide folders bar: a plain "Messages" title when IG's own header can't replace the bar.
+            ps.reso.instaeclipse.mods.ghost.FoldersHeaderFallback.attach(activity);
         }
 
         // Cache resource IDs once per IG install (string table lookup is non-trivial).
