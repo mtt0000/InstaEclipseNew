@@ -37,10 +37,7 @@ public final class NavGestureBinder {
     public static final int DOUBLE_TAP_LONG_PRESS = 2;
 
     /** Max gap between one tap's release and the next press for them to count as a sequence. */
-    private static final int TAP_GAP_MS = 500;
-    /** How long the final press is held. Capped: Android's long-press delay can be 1-1.5 s
-     *  (accessibility "touch & hold delay"), and the 2 taps + hold gesture then went unnoticed. */
-    private static final int MAX_HOLD_MS = 450;
+    private static final int TAP_GAP_MS = 350;
 
     private static final WeakHashMap<View, Binding> BINDINGS = new WeakHashMap<>();
 
@@ -183,7 +180,7 @@ public final class NavGestureBinder {
                             // taps counts this press too: the 3rd press after two quick taps
                             armed = m == LONG_PRESS || taps >= 3;
                             handler.removeCallbacks(timer);
-                            if (armed) handler.postDelayed(timer, Math.min(ViewConfiguration.getLongPressTimeout(), MAX_HOLD_MS));
+                            if (armed) handler.postDelayed(timer, ViewConfiguration.getLongPressTimeout());
                             break;
                         }
                         case MotionEvent.ACTION_MOVE: {
@@ -200,9 +197,8 @@ public final class NavGestureBinder {
                         case MotionEvent.ACTION_CANCEL: {
                             handler.removeCallbacks(timer);
                             armed = false;
-                            // A tap Instagram cancels (e.g. the swipe container taking the touch) still
-                            // ended there: count it like a release instead of starting over.
-                            lastUpTime = SystemClock.uptimeMillis();
+                            if (e.getActionMasked() == MotionEvent.ACTION_UP) lastUpTime = SystemClock.uptimeMillis();
+                            else taps = 0;
                             if (firedThisPress) {
                                 // The shortcut ran: no tab switch / click for this release, and
                                 // Instagram's own handling of the press is ended with a cancel.
