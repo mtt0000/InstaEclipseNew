@@ -108,11 +108,6 @@ public class FeatureFlags {
     public static volatile int ghostToggleGesture = 1;   // Messages / inbox button: Ghost Mode quick toggle
     public static volatile boolean isCleanUiActive = false;
     public static volatile String cleanUiSavedSnapshot = "";
-    // Home shortcut set (HomeQuickToggle): "flag:1,flag:0", "" = Clean UI only, "none" = empty set
-    public static volatile String homeToggleProfile = "";
-    public static volatile boolean homeToggleActive = false;   // the set is applied right now
-    public static volatile String homeToggleSnapshot = "";     // the values it replaced, restored on the next use
-    public static volatile String homeToggleApplied = "";      // the values it set: a switch no longer at its value was changed by hand
 
     // Which ghost mode features the quick toggle will control
     public static volatile boolean quickToggleSeen = false;

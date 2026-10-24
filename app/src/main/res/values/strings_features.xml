@@ -39,7 +39,7 @@
     <string name="menu_nav_shortcuts">Nav bar shortcuts</string>
     <string name="nav_shortcut_search">Search: open InstaEclipse menu</string>
     <string name="nav_shortcut_direct">Messages: Ghost Mode quick toggle</string>
-    <string name="nav_shortcut_home">Home: quick shortcut</string>
+    <string name="nav_shortcut_home">Home: Clean UI quick toggle</string>
 
     <!-- Hide Specific Chats > batch hide (inbox header button) -->
     <string name="ig_batch_hide_title">Hide chats</string>
@@ -54,21 +54,4 @@
     <string name="ig_folders_diag_hint">Turn on Hide folders bar, open the DMs once, then come back here and tap Copy.</string>
     <string name="ig_folders_diag_copy">Copy</string>
     <string name="ig_folders_diag_copied">Copied</string>
-
-    <!-- Home shortcut: switches applied by the Home button gesture, restored on its next use -->
-    <string name="ig_home_toggle_title">Home shortcut actions</string>
-    <string name="ig_home_toggle_count">%1$d set</string>
-    <string name="ig_home_toggle_hint">Choose what the Home button shortcut does. The first use applies these settings, the next one puts back exactly what they were before. Tap a row to switch between Not included, Turn on and Turn off. A few features only change after Instagram restarts.</string>
-    <string name="ig_home_toggle_active_note">The shortcut is applied right now: changes made here take effect from its next use.</string>
-    <string name="ig_home_toggle_state_off">Not included</string>
-    <string name="ig_home_toggle_state_enable">Turn on</string>
-    <string name="ig_home_toggle_state_disable">Turn off</string>
-    <string name="ig_home_toggle_group_ui">Interface</string>
-    <string name="ig_home_toggle_clean_ui">Hide InstaEclipse buttons (Clean UI)</string>
-    <string name="ig_home_toggle_conflict_title">Restore settings</string>
-    <string name="ig_home_toggle_conflict_hint">You changed these settings while the Home shortcut was applied. Ticked ones go back to their previous value, unticked ones keep your choice. Everything else is restored as usual.</string>
-    <string name="ig_home_toggle_conflict_item">%1$s: back to %2$s (now %3$s)</string>
-    <string name="ig_home_toggle_conflict_confirm">Confirm</string>
-    <string name="ig_home_toggle_value_on">ON</string>
-    <string name="ig_home_toggle_value_off">OFF</string>
 </resources>

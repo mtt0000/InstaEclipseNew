@@ -39,7 +39,7 @@
     <string name="menu_nav_shortcuts">Scorciatoie barra di navigazione</string>
     <string name="nav_shortcut_search">Cerca: apri il menù InstaEclipse</string>
     <string name="nav_shortcut_direct">Messaggi: attiva/disattiva Ghost Mode</string>
-    <string name="nav_shortcut_home">Home: scorciatoia rapida</string>
+    <string name="nav_shortcut_home">Home: attiva/disattiva Clean UI</string>
 
     <!-- Hide Specific Chats > batch hide (inbox header button) -->
     <string name="ig_batch_hide_title">Nascondi chat</string>
@@ -54,21 +54,4 @@
     <string name="ig_folders_diag_hint">Attiva Nascondi barra delle cartelle, apri una volta i Direct, poi torna qui e tocca Copia.</string>
     <string name="ig_folders_diag_copy">Copia</string>
     <string name="ig_folders_diag_copied">Copiato</string>
-
-    <!-- Home shortcut: switches applied by the Home button gesture, restored on its next use -->
-    <string name="ig_home_toggle_title">Azioni scorciatoia Home</string>
-    <string name="ig_home_toggle_count">%1$d impostate</string>
-    <string name="ig_home_toggle_hint">Scegli cosa fa la scorciatoia del tasto Home. Il primo utilizzo applica queste impostazioni, il successivo rimette esattamente com\'erano prima. Tocca una riga per passare tra Non incluso, Attiva e Disattiva. Alcune funzioni cambiano solo dopo il riavvio di Instagram.</string>
-    <string name="ig_home_toggle_active_note">La scorciatoia è applicata in questo momento: le modifiche fatte qui valgono dal suo prossimo utilizzo.</string>
-    <string name="ig_home_toggle_state_off">Non incluso</string>
-    <string name="ig_home_toggle_state_enable">Attiva</string>
-    <string name="ig_home_toggle_state_disable">Disattiva</string>
-    <string name="ig_home_toggle_group_ui">Interfaccia</string>
-    <string name="ig_home_toggle_clean_ui">Nascondi i pulsanti di InstaEclipse (Clean UI)</string>
-    <string name="ig_home_toggle_conflict_title">Ripristino impostazioni</string>
-    <string name="ig_home_toggle_conflict_hint">Hai cambiato queste impostazioni mentre la scorciatoia Home era applicata. Quelle spuntate tornano al valore precedente, quelle non spuntate mantengono la tua scelta. Tutto il resto viene ripristinato come sempre.</string>
-    <string name="ig_home_toggle_conflict_item">%1$s: torna a %2$s (ora %3$s)</string>
-    <string name="ig_home_toggle_conflict_confirm">Conferma</string>
-    <string name="ig_home_toggle_value_on">ON</string>
-    <string name="ig_home_toggle_value_off">OFF</string>
 </resources>
