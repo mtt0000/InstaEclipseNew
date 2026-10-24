@@ -2544,12 +2544,12 @@ public class FeaturesFragment extends Fragment {
 
             @Override
             public int getMovementFlags(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh) {
-                return draggable(vh.getBindingAdapterPosition()) ? super.getMovementFlags(rv, vh) : 0;
+                return draggable(vh.getAdapterPosition()) ? super.getMovementFlags(rv, vh) : 0;
             }
 
             @Override
             public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh, @NonNull RecyclerView.ViewHolder target) {
-                int from = vh.getBindingAdapterPosition(), to = target.getBindingAdapterPosition();
+                int from = vh.getAdapterPosition(), to = target.getAdapterPosition();
                 if (!draggable(from) || !draggable(to)) return false;
                 java.util.Collections.swap(adapter.items, from, to);
                 adapter.notifyItemMoved(from, to);
