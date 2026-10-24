@@ -28,6 +28,7 @@ public final class ModuleReplies {
     private static final long REPLY_LIFETIME_MS = 30_000;
     public static final int MAX_CONFIG_CHARS = 200_000;
     static final int MAX_PREFERENCE_STRING_CHARS = 16 * 1024;
+    static final int MAX_PROFILES_CHARS = 256 * 1024;
     private static final int MAX_REPLY_BYTES = 512 * 1024;
     private static final Map<String, Class<?>> PREFERENCE_TYPES = preferenceTypes();
 
@@ -155,6 +156,9 @@ public final class ModuleReplies {
         // The profile spoofer's picture is a small Base64 JPEG, larger than any other string
         // setting: only that key gets the higher limit, and only for Base64 text.
         if ("spoofAvatar".equals(key)) return ps.reso.instaeclipse.utils.profile.SpoofAvatar.isValid((String) value);
+        // Settings profiles hold several profiles' settings in one string.
+        if (ps.reso.instaeclipse.utils.core.SettingsProfiles.KEY.equals(key))
+            return ((String) value).length() <= MAX_PROFILES_CHARS;
         return ((String) value).length() <= MAX_PREFERENCE_STRING_CHARS;
     }
 }

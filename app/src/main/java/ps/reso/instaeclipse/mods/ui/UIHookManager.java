@@ -25,9 +25,9 @@ import ps.reso.instaeclipse.R;
 import ps.reso.instaeclipse.Xposed.Module;
 import ps.reso.instaeclipse.mods.devops.config.ConfigManager;
 import ps.reso.instaeclipse.mods.ui.utils.BottomSheetHookUtil;
-import ps.reso.instaeclipse.mods.ui.utils.CleanUiManager;
 import ps.reso.instaeclipse.mods.ui.utils.LifecycleHookUtil;
 import ps.reso.instaeclipse.mods.ui.utils.NavGestureBinder;
+import ps.reso.instaeclipse.mods.ui.utils.ProfileManager;
 import ps.reso.instaeclipse.mods.ui.utils.VibrationUtil;
 import ps.reso.instaeclipse.utils.core.SettingsManager;
 import ps.reso.instaeclipse.utils.dialog.DialogUtils;
@@ -112,7 +112,7 @@ public class UIHookManager {
                 ? NavGestureBinder.DOUBLE_TAP_LONG_PRESS : NavGestureBinder.LONG_PRESS;
     }
 
-    /** Clean UI on Home, Ghost Mode quick toggle on Messages / the inbox button. */
+    /** Next settings profile on Home, Ghost Mode quick toggle on Messages / the inbox button. */
     private static void bindNavShortcuts(Activity activity) {
         View homeTab = sFeedTabId != 0 ? activity.findViewById(sFeedTabId) : null;
         if (homeTab == null && sTabBarId != 0) {
@@ -122,7 +122,7 @@ public class UIHookManager {
             }
         }
         NavGestureBinder.bind(activity, homeTab, () -> FeatureFlags.cleanUiToggleGesture,
-                CleanUiManager::toggleCleanUi);
+                ProfileManager::switchNext, false);
 
         for (int id : new int[]{sDirectTabId, sInboxButtonId}) {
             View v = id != 0 ? activity.findViewById(id) : null;
@@ -388,8 +388,7 @@ public class UIHookManager {
                 if (json == null || json.isEmpty()) return;
                 new Thread(() -> {
                     try {
-                        ps.reso.instaeclipse.utils.backup.SettingsBackupManager.fromJson(json);
-                        SettingsManager.saveAllFlags();
+                        SettingsManager.applyValues(ps.reso.instaeclipse.utils.backup.SettingsBackupManager.parse(json));
                         ps.reso.instaeclipse.utils.feature.FeatureManager.refreshFeatureStatus();
                         Handler mainHandler = new Handler(Looper.getMainLooper());
                         mainHandler.post(() -> ps.reso.instaeclipse.utils.toast.IeToast.makeText(ctx.getApplicationContext(),

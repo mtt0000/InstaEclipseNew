@@ -49,6 +49,11 @@ public final class NavGestureBinder {
      * applies without re-binding.
      */
     public static void bind(Activity activity, View view, IntSupplier mode, Consumer<Activity> action) {
+        bind(activity, view, mode, action, true);
+    }
+
+    /** {@code vibrate} false: no vibration when the shortcut fires (the action confirms on its own). */
+    public static void bind(Activity activity, View view, IntSupplier mode, Consumer<Activity> action, boolean vibrate) {
         if (view == null) return;
         Binding b = BINDINGS.get(view);
         if (b == null) {
@@ -58,6 +63,7 @@ public final class NavGestureBinder {
         b.activity = new WeakReference<>(activity);
         b.mode = mode;
         b.action = action;
+        b.vibrate = vibrate;
 
         View.OnTouchListener current = touchListenerOf(view);
         if (current != b.listener) {
@@ -107,6 +113,7 @@ public final class NavGestureBinder {
         WeakReference<Activity> activity = new WeakReference<>(null);
         IntSupplier mode = () -> OFF;
         Consumer<Activity> action;
+        boolean vibrate = true;
         View.OnTouchListener original;
 
         final Listener listener = new Listener();
@@ -142,7 +149,7 @@ public final class NavGestureBinder {
             if (a == null) a = activity.get();
             if (a == null || action == null) return;
             try {
-                VibrationUtil.vibrate(a);
+                if (vibrate) VibrationUtil.vibrate(a);
                 action.accept(a);
             } catch (Throwable t) {
                 ModuleLog.line("(InstaEclipse|NavGesture) action failed: " + t);

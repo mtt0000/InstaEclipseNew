@@ -47,14 +47,12 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
 import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -152,22 +150,7 @@ public class FeaturesFragment extends Fragment {
             try (InputStream is = requireContext().getContentResolver().openInputStream(uri);
                  Scanner scanner = new Scanner(is, "UTF-8").useDelimiter("\\A")) {
                 String json = scanner.hasNext() ? scanner.next() : "";
-                JSONObject root = new JSONObject(json);
-                JSONObject s = root.has("settings") ? root.getJSONObject("settings") : root;
-                SharedPreferences.Editor editor = localCache.edit();
-                Iterator<String> keys = s.keys();
-                while (keys.hasNext()) {
-                    String key = keys.next();
-                    Object val = s.get(key);
-                    if (val instanceof Boolean) {
-                        editor.putBoolean(key, (Boolean) val);
-                        Intent intent = new Intent("ps.reso.instaeclipse.ACTION_UPDATE_PREF");
-                        intent.putExtra("key", key);
-                        intent.putExtra("value", (boolean) (Boolean) val);
-                        ps.reso.instaeclipse.utils.core.CommonUtils.broadcastToInstagram(requireContext(), intent);
-                    }
-                }
-                editor.apply();
+                applySettings(ps.reso.instaeclipse.utils.backup.SettingsBackupManager.parse(json));
                 refreshVisibleMenu();
                 ps.reso.instaeclipse.utils.toast.IeToast.makeText(requireContext(), getString(R.string.ig_toast_settings_restored), Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
@@ -906,6 +889,17 @@ public class FeaturesFragment extends Fragment {
         };
         List<Category> categories = getCategories();
 
+        // Settings profiles, and everything the module adds to Instagram off at once.
+        ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile activeProfile = profileStore().active();
+        FeatureItem profilesRow = createTool(R.drawable.ic_tune, A_TOOLS, getString(R.string.profiles_title),
+                activeProfile != null ? activeProfile.name : getString(R.string.profiles_open_instagram), this::loadSettingsProfilesMenu);
+        FeatureItem injectionsRow = createTool(R.drawable.ic_block, A_TOOLS, getString(R.string.injections_off_title),
+                getString(R.string.injections_off_sub), this::confirmDisableInjections);
+        profilesRow.isCategory = true;
+        injectionsRow.isCategory = true;
+        defs.add(getString(R.string.profiles_group));
+        defs.add(Arrays.asList(profilesRow, injectionsRow));
+
         for (int g = 0; g < groupTitles.length; g++) {
             List<FeatureItem> rows = new ArrayList<>();
             for (Category cat : categories) {
@@ -1092,6 +1086,9 @@ public class FeaturesFragment extends Fragment {
         // Outside the master switch
         defs.add(getString(R.string.feat_options));
         defs.add(Arrays.asList(
+                // Buttons only: Ghost Mode works without them (off with "Turn off all injections").
+                createSwitch(R.drawable.ic_eye_off, "#5E5CE6", getString(R.string.ie_ghost_seen_button), "ghostSeenButton"),
+                createSwitch(R.drawable.ic_chat, "#5E5CE6", getString(R.string.ie_ghost_inbox_tint), "ghostInboxTint"),
                 createSwitch(R.drawable.ic_eye, "#5E5CE6", getString(R.string.ig_dialog_ghost_read_receipt_chats), "readReceiptChats"),
                 createSwitch(R.drawable.ic_timer, "#5E5CE6", getString(R.string.ig_dialog_misc_spoof_last_seen), "spoofLastSeen"),
                 createExtrasSwitch("#5E5CE6", "airplaneMode")
@@ -1121,6 +1118,7 @@ public class FeaturesFragment extends Fragment {
                 createSwitch(R.drawable.ic_chat, "#5E5CE6", getString(R.string.ig_dialog_ghost_keep_unsent), "keepUnsentMessages"),
                 createSwitch(R.drawable.ic_chat, "#5E5CE6", getString(R.string.ie_keep_unsent_in_chat), "keepUnsentInChat"),
                 createSwitch(R.drawable.ic_delete, "#5E5CE6", getString(R.string.ie_show_deleted_button), "showDeletedMessagesButton"),
+                createSwitch(R.drawable.ic_tune, "#5E5CE6", getString(R.string.ie_chat_header_menu), "chatHeaderMenu"),
                 createSwitch(R.drawable.ic_chat, "#5E5CE6", getString(R.string.ig_dialog_ghost_edit_history), "keepEditHistory"),
                 createSwitch(R.drawable.ic_jump_first, "#5E5CE6", getString(R.string.ig_dialog_ghost_jump_first), "jumpToFirstMessage"),
                 createSwitch(R.drawable.ic_shield, "#5E5CE6", getString(R.string.ig_call_confirm), "confirmCalls"),
@@ -1744,6 +1742,7 @@ public class FeaturesFragment extends Fragment {
         defs.add(Arrays.asList(
                 createSwitch(R.drawable.ic_content_copy, A_SOCIAL, getString(R.string.ig_profile_menu_tools), "profileMenuTools"),
                 createSwitch(R.drawable.ic_heart, A_SOCIAL, getString(R.string.ig_post_counts_feature), "postCountSpoof"),
+                createSwitch(R.drawable.ic_tune, A_SOCIAL, getString(R.string.ie_post_counts_menu), "postCountsMenu"),
                 createSwitch(R.drawable.ic_eye, A_SOCIAL, getString(R.string.ig_profile_spoofer), "profileSpoofer"),
                 profileSpoofItem(),
                 createSwitch(R.drawable.ic_search, A_SOCIAL, getString(R.string.ig_profile_analyzer), "profileAnalyzer"),
@@ -1918,6 +1917,7 @@ public class FeaturesFragment extends Fragment {
                 createSwitch(R.drawable.ic_shield, "#5E5CE6", getString(R.string.ig_dialog_misc_lock_dms_always), "lockDirectAlways"),
                 createSwitch(R.drawable.ic_shield, "#5E5CE6", getString(R.string.ig_dialog_misc_lock_whole_app), "lockWholeApp"),
                 createSwitch(R.drawable.ic_shield, "#5E5CE6", getString(R.string.ig_locked_coll_setting), "lockSavedCollections"),
+                createSwitch(R.drawable.ic_shield, "#5E5CE6", getString(R.string.ie_lock_collections_button), "lockCollectionsButton"),
                 createSwitch(R.drawable.ic_shield, "#5E5CE6", getString(R.string.ig_dialog_misc_lock_fingerprint), "lockUseFingerprint")
         ));
 
@@ -2310,7 +2310,7 @@ public class FeaturesFragment extends Fragment {
         quality.add(createTool(R.drawable.ic_download, "#FF9F0A", getString(R.string.ie_download_quality),
                 downloadModeLabel(), this::chooseDownloadQuality));
         // The two switches only apply to Best.
-        if (!getCurrentState("downloaderUseOriginal")) {
+        if (getCurrentState("downloaderCustomQuality")) {
             quality.add(createSwitch(R.drawable.ic_tune, "#FF9F0A", getString(R.string.ie_download_compatibility), "downloaderCompatibility"));
             quality.add(createSwitch(R.drawable.ic_download, "#FF9F0A", getString(R.string.ie_download_fallback), "downloaderAllowFallback"));
         }
@@ -2332,7 +2332,7 @@ public class FeaturesFragment extends Fragment {
 
     /** Standard (the original downloader) or Best, with its resolution cap. */
     private String downloadModeLabel() {
-        if (getCurrentState("downloaderUseOriginal")) return getString(R.string.ie_downloader_original);
+        if (!getCurrentState("downloaderCustomQuality")) return getString(R.string.ie_downloader_original);
         int ceiling = localCache.getInt("downloaderQualityMaxShortSide", 0);
         return ceiling <= 0 ? getString(R.string.ie_download_best) : getString(R.string.ie_download_ceiling, ceiling);
     }
@@ -2341,7 +2341,7 @@ public class FeaturesFragment extends Fragment {
     private void chooseDownloadQuality() {
         int[] values = {-1, 0, 2160, 1440, 1080, 720, 480}; // -1 = Standard
         String[] labels = new String[values.length];
-        boolean standard = getCurrentState("downloaderUseOriginal");
+        boolean standard = !getCurrentState("downloaderCustomQuality");
         int current = localCache.getInt("downloaderQualityMaxShortSide", 0), selected = 0;
         for (int i=0; i<values.length; i++) {
             labels[i] = values[i] < 0 ? getString(R.string.ie_downloader_original)
@@ -2350,7 +2350,7 @@ public class FeaturesFragment extends Fragment {
         }
         new MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.ie_download_quality)
                 .setSingleChoiceItems(labels, selected, (dialog, which) -> {
-                    putBoolPref("downloaderUseOriginal", values[which] < 0);
+                    putBoolPref("downloaderCustomQuality", values[which] >= 0);
                     if (values[which] >= 0) putIntPref("downloaderQualityMaxShortSide", values[which]);
                     dialog.dismiss(); loadDownloaderMenu();
                 }).setNegativeButton(android.R.string.cancel, null).show();
@@ -2454,21 +2454,192 @@ public class FeaturesFragment extends Fragment {
         }
     }
 
+    // =========================================================
+    // SETTINGS PROFILES (same store as Instagram's menu: SettingsProfiles)
+    // =========================================================
+
+    private ps.reso.instaeclipse.utils.core.SettingsProfiles profileStore() {
+        return ps.reso.instaeclipse.utils.core.SettingsProfiles.parse(
+                localCache.getString(ps.reso.instaeclipse.utils.core.SettingsProfiles.KEY, ""));
+    }
+
+    /** The settings as this app knows them (Instagram's, synced), without the sync stamps. */
+    private Map<String, Object> currentSettings() {
+        Map<String, Object> out = new HashMap<>();
+        for (Map.Entry<String, ?> e : localCache.getAll().entrySet())
+            if (!e.getKey().startsWith("__")) out.put(e.getKey(), e.getValue());
+        return out;
+    }
+
+    /** Writes several settings at once and has Instagram take them in one go (see CompanionSync). */
+    private void applySettings(Map<String, ?> values) {
+        if (values.isEmpty()) return;
+        ps.reso.instaeclipse.utils.core.CommonUtils.stampSettings(requireContext(), values);
+        makeLocalCacheWorldReadable();
+        ps.reso.instaeclipse.utils.core.CommonUtils.broadcastToInstagram(requireContext(),
+                new Intent(ps.reso.instaeclipse.utils.core.CompanionSync.ACTION_PULL));
+    }
+
+    private void saveProfileStore(ps.reso.instaeclipse.utils.core.SettingsProfiles store) {
+        Map<String, Object> v = new HashMap<>();
+        v.put(ps.reso.instaeclipse.utils.core.SettingsProfiles.KEY, store.serialize());
+        applySettings(v);
+    }
+
+    private void loadSettingsProfilesMenu() {
+        if (profileStore().isEmpty()) {
+            // Created by Instagram the first time it loads the settings.
+            ps.reso.instaeclipse.utils.toast.IeToast.makeText(requireContext(), getString(R.string.profiles_open_instagram), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        showMenu(getString(R.string.profiles_title), buildSettingsProfilesDefs());
+        currentMenu = "setprofiles";
+    }
+
+    private List<Object> buildSettingsProfilesDefs() {
+        List<Object> defs = new ArrayList<>();
+        ps.reso.instaeclipse.utils.core.SettingsProfiles store = profileStore();
+        ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile active = store.active();
+        List<FeatureItem> rows = new ArrayList<>();
+        for (ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile pr : store.list()) {
+            boolean on = active != null && pr.id.equals(active.id);
+            rows.add(createClickable(on ? R.drawable.ic_check_circle : R.drawable.ic_tune, on ? "#30D158" : "#8E8E93",
+                    on ? getString(R.string.profiles_active_row, pr.name) : pr.name, () -> showProfileActions(pr.id)));
+        }
+        rows.add(createClickable(R.drawable.ic_save, "#0A84FF", getString(R.string.profiles_new), () ->
+                promptProfileName(getString(R.string.profiles_new),
+                        store.uniqueName(getString(R.string.profiles_default_name, store.list().size() + 1)), name -> {
+                            ps.reso.instaeclipse.utils.core.SettingsProfiles p = profileStore();
+                            p.add(p.uniqueName(name));
+                            saveProfileStore(p);
+                            loadSettingsProfilesMenu();
+                        })));
+        defs.add(getString(R.string.profiles_list));
+        defs.add(rows);
+
+        defs.add(getString(R.string.profiles_confirm_section));
+        defs.add(Arrays.asList(
+                createSwitch(R.drawable.ic_notification, "#30D158", getString(R.string.profiles_confirm_vibrate), "profileSwitchVibrate"),
+                createSwitch(R.drawable.ic_notification, "#30D158", getString(R.string.profiles_confirm_name), "profileSwitchShowName")));
+        return defs;
+    }
+
+    private void showProfileActions(String id) {
+        Context context = getContext();
+        ps.reso.instaeclipse.utils.core.SettingsProfiles store = profileStore();
+        ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile pr = store.get(id);
+        if (context == null || pr == null) return;
+        boolean isActive = store.active() != null && id.equals(store.active().id);
+        String[] labels = {
+                getString(R.string.profiles_action_activate),
+                getString(R.string.profiles_action_edit),
+                getString(R.string.profiles_action_rename),
+                getString(R.string.profiles_action_clone),
+                getString(R.string.profiles_action_reset),
+                getString(R.string.profiles_action_delete)};
+        Map<String, Object> defaults = ps.reso.instaeclipse.utils.feature.FeatureFlags.defaults();
+        new MaterialAlertDialogBuilder(context)
+                .setTitle(pr.name)
+                .setItems(labels, (d, which) -> {
+                    switch (which) {
+                        case 0: // activate
+                        case 1: { // edit: its settings are the menus' while it is active
+                            ps.reso.instaeclipse.utils.core.SettingsProfiles p = profileStore();
+                            applySettings(p.activate(id, currentSettings(), defaults));
+                            if (which == 0) loadSettingsProfilesMenu(); else loadMainMenu();
+                            break;
+                        }
+                        case 2:
+                            promptProfileName(labels[2], pr.name, name -> {
+                                ps.reso.instaeclipse.utils.core.SettingsProfiles p = profileStore();
+                                if (p.rename(id, name)) saveProfileStore(p);
+                                loadSettingsProfilesMenu();
+                            });
+                            break;
+                        case 3:
+                            promptProfileName(labels[3], store.uniqueName(getString(R.string.profiles_copy_name, pr.name)), name -> {
+                                ps.reso.instaeclipse.utils.core.SettingsProfiles p = profileStore();
+                                p.duplicate(id, p.uniqueName(name), currentSettings(), defaults);
+                                saveProfileStore(p);
+                                loadSettingsProfilesMenu();
+                            });
+                            break;
+                        case 4:
+                            new MaterialAlertDialogBuilder(context).setTitle(labels[4])
+                                    .setMessage(getString(R.string.profiles_reset_confirm, pr.name))
+                                    .setPositiveButton(android.R.string.ok, (d2, w2) -> {
+                                        ps.reso.instaeclipse.utils.core.SettingsProfiles p = profileStore();
+                                        applySettings(p.reset(id, currentSettings(), defaults));
+                                        loadSettingsProfilesMenu();
+                                    })
+                                    .setNegativeButton(android.R.string.cancel, null).show();
+                            break;
+                        case 5:
+                            if (isActive || store.list().size() < 2) {
+                                ps.reso.instaeclipse.utils.toast.IeToast.makeText(context, getString(R.string.profiles_cant_delete), Toast.LENGTH_SHORT).show();
+                                break;
+                            }
+                            new MaterialAlertDialogBuilder(context).setTitle(labels[5])
+                                    .setMessage(getString(R.string.profiles_delete_confirm, pr.name))
+                                    .setPositiveButton(android.R.string.ok, (d2, w2) -> {
+                                        ps.reso.instaeclipse.utils.core.SettingsProfiles p = profileStore();
+                                        if (p.delete(id)) saveProfileStore(p);
+                                        loadSettingsProfilesMenu();
+                                    })
+                                    .setNegativeButton(android.R.string.cancel, null).show();
+                            break;
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void promptProfileName(String title, String initial, java.util.function.Consumer<String> onName) {
+        final android.widget.EditText input = new android.widget.EditText(requireContext());
+        input.setSingleLine(true);
+        input.setHint(R.string.profiles_name_hint);
+        input.setText(initial);
+        input.setSelection(input.getText().length());
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        android.widget.FrameLayout box = new android.widget.FrameLayout(requireContext());
+        box.setPadding(pad, pad / 2, pad, 0);
+        box.addView(input);
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(title)
+                .setView(box)
+                .setPositiveButton(android.R.string.ok, (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (!name.isEmpty()) onName.accept(name);
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    /** "Turn off all injections": every switch that only adds something to Instagram, after a confirm. */
+    private void confirmDisableInjections() {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.injections_off_title)
+                .setMessage(R.string.injections_off_confirm)
+                .setPositiveButton(R.string.injections_off_action, (d, w) -> {
+                    Map<String, Object> off = new HashMap<>();
+                    for (String flag : ps.reso.instaeclipse.mods.ui.utils.InjectedUi.FLAGS)
+                        if (localCache.getBoolean(flag, false)) off.put(flag, false);
+                    stagedChanges.keySet().removeAll(off.keySet());
+                    applySettings(off);
+                    ps.reso.instaeclipse.utils.toast.IeToast.makeText(requireContext(), getString(R.string.injections_off_done), Toast.LENGTH_SHORT).show();
+                    refreshVisibleMenu();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
     private void backupSettings() {
         try {
-            JSONObject settings = new JSONObject();
-            Map<String, ?> all = localCache.getAll();
-            for (Map.Entry<String, ?> entry : all.entrySet()) {
-                if (entry.getValue() instanceof Boolean) {
-                    settings.put(entry.getKey(), entry.getValue());
-                }
-            }
-            JSONObject root = new JSONObject();
-            root.put("version", 1);
-            root.put("settings", settings);
+            // Every setting and the settings profiles, the same file Instagram's menu writes.
+            String json = ps.reso.instaeclipse.utils.backup.SettingsBackupManager.toJson(localCache.getAll());
             Intent exportIntent = new Intent();
             exportIntent.setComponent(new ComponentName(requireContext(), "ps.reso.instaeclipse.mods.devops.config.JsonExportActivity"));
-            exportIntent.putExtra("json_content", root.toString(2));
+            exportIntent.putExtra("json_content", json);
             exportIntent.putExtra("file_name", "instaeclipse_settings.json");
             startActivity(exportIntent);
         } catch (JSONException e) {
@@ -2713,7 +2884,7 @@ public class FeaturesFragment extends Fragment {
     /** A switch applies at once, like in Instagram's menu: saved, stamped and sent to Instagram
      *  live (or picked up by Instagram's sync on its next start / resume). No Save step. */
     private void stageChange(String prefKey, boolean isChecked) {
-        if (localCache.getBoolean(prefKey, "downloaderUseOriginal".equals(prefKey)) == isChecked) return;
+        if (localCache.getBoolean(prefKey, false) == isChecked) return;
         putBoolPref(prefKey, isChecked);
     }
 
@@ -2741,7 +2912,7 @@ public class FeaturesFragment extends Fragment {
     private boolean getCurrentState(String prefKey) {
         if (prefKey == null) return false;
         if (stagedChanges.containsKey(prefKey)) return stagedChanges.get(prefKey);
-        return localCache.getBoolean(prefKey, "downloaderUseOriginal".equals(prefKey));
+        return localCache.getBoolean(prefKey, false);
     }
 
     // =========================================================

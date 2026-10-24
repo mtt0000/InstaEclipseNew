@@ -10,14 +10,11 @@
     <string name="ig_direct_empty_general_folder">Show \'General\' Folder as Empty</string>
     <string name="ig_direct_hide_folders_bar">Hide Folders Bar</string>
 
-    <!-- Clean UI Quick Toggle -->
-    <string name="clean_ui_toggle_title">Clean UI Quick Toggle</string>
+    <!-- Nav bar shortcut gestures -->
     <string name="clean_ui_gesture_mode">Home Button Shortcut</string>
     <string name="clean_ui_gesture_off">Off</string>
     <string name="clean_ui_gesture_long_press">Long Press</string>
     <string name="clean_ui_gesture_double_tap_long">2 Taps + Long Press</string>
-    <string name="clean_ui_toast_on">Clean UI: On (Buttons hidden)</string>
-    <string name="clean_ui_toast_off">Clean UI: Off (Buttons restored)</string>
 
     <!-- Secret Menu, Batch Hide & App Disguise -->
     <string name="ig_dialog_secret_menu_trigger">Secret Menu Trigger</string>
@@ -39,7 +36,7 @@
     <string name="menu_nav_shortcuts">Nav bar shortcuts</string>
     <string name="nav_shortcut_search">Search: open InstaEclipse menu</string>
     <string name="nav_shortcut_direct">Messages: Ghost Mode quick toggle</string>
-    <string name="nav_shortcut_home">Home: Clean UI quick toggle</string>
+    <string name="nav_shortcut_home">Home: next settings profile</string>
 
     <!-- Hide Specific Chats > batch hide (inbox header button) -->
     <string name="ig_batch_hide_title">Hide chats</string>
@@ -54,4 +51,40 @@
     <string name="ig_folders_diag_hint">Turn on Hide folders bar, open the DMs once, then come back here and tap Copy.</string>
     <string name="ig_folders_diag_copy">Copy</string>
     <string name="ig_folders_diag_copied">Copied</string>
+
+    <!-- Settings profiles and Turn off all injections -->
+    <string name="profiles_group">Profiles</string>
+    <string name="profiles_title">Settings profiles</string>
+    <string name="profiles_default_name">Profile %1$d</string>
+    <string name="profiles_need_two">Create a second settings profile to switch with Home</string>
+    <string name="profiles_switched">Profile: %1$s</string>
+    <string name="profiles_list">Profiles</string>
+    <string name="profiles_active_row">%1$s · active</string>
+    <string name="profiles_new">New profile</string>
+    <string name="profiles_hint">The active profile is your current settings: whatever you change in the menu is saved in it. Home (Navigation › Nav bar shortcuts) switches to the next profile.</string>
+    <string name="profiles_confirm_section">When switching profile</string>
+    <string name="profiles_confirm_vibrate">Vibrate</string>
+    <string name="profiles_confirm_name">Show the profile name</string>
+    <string name="profiles_action_activate">Activate</string>
+    <string name="profiles_action_edit">Edit (activate and open the settings)</string>
+    <string name="profiles_action_rename">Rename</string>
+    <string name="profiles_action_clone">Clone</string>
+    <string name="profiles_action_reset">Reset (everything off)</string>
+    <string name="profiles_action_delete">Delete</string>
+    <string name="profiles_copy_name">%1$s copy</string>
+    <string name="profiles_reset_confirm">Turn off every setting of \"%1$s\"? Instagram then works as without the module. Shortcuts, app disguise and the passcode stay as they are.</string>
+    <string name="profiles_delete_confirm">Delete the profile \"%1$s\"?</string>
+    <string name="profiles_cant_delete">The active profile and the last one left can\'t be deleted</string>
+    <string name="profiles_name_hint">Profile name</string>
+    <string name="profiles_open_instagram">Open Instagram once to set up the profiles</string>
+    <string name="injections_off_title">Turn off all injections</string>
+    <string name="injections_off_sub">Every button, row and label the module adds</string>
+    <string name="injections_off_confirm">Turns off every switch that only adds a button, menu row or label to Instagram. The features themselves (Ghost Mode, locks, downloads already set up…) keep their own switches.</string>
+    <string name="injections_off_action">Turn off</string>
+    <string name="injections_off_done">Injections turned off</string>
+    <string name="ie_ghost_seen_button">\"Mark as read\" button</string>
+    <string name="ie_ghost_inbox_tint">Gold Messages icon in Ghost Mode</string>
+    <string name="ie_chat_header_menu">⋮ menu in the chat header</string>
+    <string name="ie_lock_collections_button">🔒 button on saved collections</string>
+    <string name="ie_post_counts_menu">\"Edit counts\" in the post menu</string>
 </resources>

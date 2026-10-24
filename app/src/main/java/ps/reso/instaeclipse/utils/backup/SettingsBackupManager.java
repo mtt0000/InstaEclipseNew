@@ -1,360 +1,125 @@
 package ps.reso.instaeclipse.utils.backup;
 
-import ps.reso.instaeclipse.mods.ads.ShareDomain;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
+import ps.reso.instaeclipse.mods.ads.ShareDomain;
+import ps.reso.instaeclipse.utils.core.SettingsManager;
+import ps.reso.instaeclipse.utils.core.SettingsProfiles;
 import ps.reso.instaeclipse.utils.feature.FeatureFlags;
 
+/**
+ * Settings backup file: every setting (FeatureFlags), the settings profiles included, as
+ * {"version":2,"settings":{key:value}}. Works on setting maps (key -> Boolean / Integer / String,
+ * as stored), so Instagram and the companion write and read the same file.
+ */
 public class SettingsBackupManager {
 
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
 
-    /** Serialises every known FeatureFlag into a versioned JSON string. */
+    /** Never in a backup: the passcode (a backup can be shared), and paths to files on this phone. */
+    static final Set<String> EXCLUDED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "lockDirectPasscode", "lockDirectSalt",
+            "customFontPath", "customEmojiPath", "downloaderCustomPath", "downloaderCustomUri")));
+
+    /** Instagram's current settings as a backup file. */
     public static String toJson() throws JSONException {
+        return toJson(SettingsManager.currentValues());
+    }
+
+    /** {@code values} (stored settings) as a backup file; a missing setting is written at its default. */
+    public static String toJson(Map<String, ?> values) throws JSONException {
         JSONObject s = new JSONObject();
-
-        // Developer
-        s.put("isDevEnabled",            FeatureFlags.isDevEnabled);
-        s.put("removeBuildExpiredPopup", FeatureFlags.removeBuildExpiredPopup);
-
-        // Ghost Mode
-        s.put("isGhostSeen",             FeatureFlags.isGhostSeen);
-        s.put("isGhostTyping",           FeatureFlags.isGhostTyping);
-        s.put("isGhostScreenshot",       FeatureFlags.isGhostScreenshot);
-        s.put("isGhostViewOnce",         FeatureFlags.isGhostViewOnce);
-        s.put("isGhostStory",            FeatureFlags.isGhostStory);
-        s.put("isGhostLive",             FeatureFlags.isGhostLive);
-        s.put("allowScreenshots",        FeatureFlags.allowScreenshots);
-        s.put("keepEphemeralMessages",   FeatureFlags.keepEphemeralMessages);
-
-        s.put("permanentViewMode",       FeatureFlags.permanentViewMode);
-        s.put("keepUnsentMessages",      FeatureFlags.keepUnsentMessages);
-
-        // Quick Toggles
-        s.put("cleanUiToggleGesture",    FeatureFlags.cleanUiToggleGesture);
-        s.put("ghostToggleGesture",      FeatureFlags.ghostToggleGesture);
-        s.put("secretMenuDoubleTap",     FeatureFlags.secretMenuDoubleTap);
-        s.put("isCleanUiActive",         FeatureFlags.isCleanUiActive);
-        s.put("cleanUiSavedSnapshot",    FeatureFlags.cleanUiSavedSnapshot);
-        s.put("quickToggleSeen",         FeatureFlags.quickToggleSeen);
-        s.put("quickToggleTyping",       FeatureFlags.quickToggleTyping);
-        s.put("quickToggleScreenshot",   FeatureFlags.quickToggleScreenshot);
-        s.put("quickToggleViewOnce",     FeatureFlags.quickToggleViewOnce);
-        s.put("quickToggleStory",        FeatureFlags.quickToggleStory);
-        s.put("quickToggleLive",         FeatureFlags.quickToggleLive);
-        s.put("quickToggleEphemeral",    FeatureFlags.quickToggleEphemeral);
-        s.put("quickTogglePermanentView",FeatureFlags.quickTogglePermanentView);
-        s.put("quickToggleAllowScreenshots", FeatureFlags.quickToggleAllowScreenshots);
-
-        // Clean Feed
-        s.put("hideSuggestionsInFeed",      FeatureFlags.hideSuggestionsInFeed);
-        s.put("hideThreadsSuggestions",     FeatureFlags.hideThreadsSuggestions);
-        s.put("hideLikedPosts",             FeatureFlags.hideLikedPosts);
-        s.put("confirmFeedRefresh",         FeatureFlags.confirmFeedRefresh);
-        s.put("hideCommunityNotes",         FeatureFlags.hideCommunityNotes);
-        s.put("followingOnlyFeed",         FeatureFlags.followingOnlyFeed);
-        s.put("hidePlusUpsells",            FeatureFlags.hidePlusUpsells);
-        s.put("expandCaptions",             FeatureFlags.expandCaptions);
-        s.put("offerAudioDownload",         FeatureFlags.offerAudioDownload);
-        s.put("enableVoiceDownload",        FeatureFlags.enableVoiceDownload);
-        s.put("enableStickerDownload",      FeatureFlags.enableStickerDownload);
-        s.put("storyTrayScale",             FeatureFlags.storyTrayScale);
-        s.put("feedCornerRadius",           FeatureFlags.feedCornerRadius);
-        s.put("storyRingColor",             FeatureFlags.storyRingColor);
-        s.put("enableDmMediaDownload",      FeatureFlags.enableDmMediaDownload);
-        s.put("offerCopyImage",             FeatureFlags.offerCopyImage);
-        s.put("offerMediaInfo",             FeatureFlags.offerMediaInfo);
-        s.put("offerPlaybackSpeed",         FeatureFlags.offerPlaybackSpeed);
-        s.put("maxUploadQuality",           FeatureFlags.maxUploadQuality);
-        s.put("forceReelScrubber",          FeatureFlags.forceReelScrubber);
-        s.put("holdLeftSlowMotion",         FeatureFlags.holdLeftSlowMotion);
-        s.put("keepEditHistory",            FeatureFlags.keepEditHistory);
-        s.put("jumpToFirstMessage",         FeatureFlags.jumpToFirstMessage);
-        s.put("translateMessages",          FeatureFlags.translateMessages);
-        s.put("bulkUnsend",                 FeatureFlags.bulkUnsend);
-        s.put("chatExport",                 FeatureFlags.chatExport);
-        s.put("hideTabHome", FeatureFlags.hideTabHome);
-        s.put("hideTabReels", FeatureFlags.hideTabReels);
-        s.put("hideTabCreate", FeatureFlags.hideTabCreate);
-        s.put("hideTabMessages", FeatureFlags.hideTabMessages);
-        s.put("hideTabActivity", FeatureFlags.hideTabActivity);
-        s.put("hideTabProfile", FeatureFlags.hideTabProfile);
-        s.put("backLeavesHome", FeatureFlags.backLeavesHome);
-        s.put("hideNotesTray", FeatureFlags.hideNotesTray);
-        s.put("hideDmSuggestions", FeatureFlags.hideDmSuggestions);
-        s.put("hideInstants", FeatureFlags.hideInstants);
-        s.put("hideDmBlend", FeatureFlags.hideDmBlend);
-        s.put("readReceiptChats", FeatureFlags.readReceiptChats);
-        s.put("hideThreadsButton", FeatureFlags.hideThreadsButton);
-
-        // Ads
-        s.put("isAdBlockEnabled",        FeatureFlags.isAdBlockEnabled);
-        s.put("isAnalyticsBlocked",      FeatureFlags.isAnalyticsBlocked);
-        s.put("disableTrackingLinks",    FeatureFlags.disableTrackingLinks);
-        s.put("openLinksExternally",     FeatureFlags.openLinksExternally);
-
-        // Distraction Free
-        s.put("isExtremeMode",           FeatureFlags.isExtremeMode);
-        s.put("disableStories",          FeatureFlags.disableStories);
-        s.put("disableFeed",             FeatureFlags.disableFeed);
-        s.put("disableReels",            FeatureFlags.disableReels);
-        s.put("disableReelsExceptDM",    FeatureFlags.disableReelsExceptDM);
-        s.put("disableExplore",          FeatureFlags.disableExplore);
-        s.put("disableComments",         FeatureFlags.disableComments);
-        s.put("disableDiscoverPeople",   FeatureFlags.disableDiscoverPeople);
-
-        // Miscellaneous
-        s.put("disableStoryFlipping",    FeatureFlags.disableStoryFlipping);
-        s.put("disableVideoAutoPlay",    FeatureFlags.disableVideoAutoPlay);
-        s.put("spoofLastSeen",           FeatureFlags.spoofLastSeen);
-        s.put("disableSearchHistory",    FeatureFlags.disableSearchHistory);
-        s.put("confirmCalls",            FeatureFlags.confirmCalls);
-        s.put("spoofLocation",           FeatureFlags.spoofLocation);
-        s.put("spoofLat",                String.valueOf(FeatureFlags.spoofLat));
-        s.put("spoofLng",                String.valueOf(FeatureFlags.spoofLng));
-        s.put("forceReelQuality",        FeatureFlags.forceReelQuality);
-        s.put("disableRepost",           FeatureFlags.disableRepost);
-        s.put("hideShareCreateGroup",    FeatureFlags.hideShareCreateGroup);
-        s.put("exactTimestamps",         FeatureFlags.exactTimestamps);
-        s.put("likeUndo",                FeatureFlags.likeUndo);
-        s.put("confirmLikes",            FeatureFlags.confirmLikes);
-        s.put("confirmFollows",          FeatureFlags.confirmFollows);
-        s.put("profileMenuTools",        FeatureFlags.profileMenuTools);
-        s.put("postCountSpoof",          FeatureFlags.postCountSpoof);
-        s.put("profileSpoofer",          FeatureFlags.profileSpoofer);
-        s.put("spoofFollowers",          FeatureFlags.spoofFollowers);
-        s.put("spoofFollowing",          FeatureFlags.spoofFollowing);
-        s.put("spoofPosts",              FeatureFlags.spoofPosts);
-        s.put("spoofVerified",           FeatureFlags.spoofVerified);
-        s.put("spoofName",               FeatureFlags.spoofName);
-        s.put("spoofUsername",           FeatureFlags.spoofUsername);
-        s.put("spoofBio",                FeatureFlags.spoofBio);
-        s.put("spoofAvatar",             FeatureFlags.spoofAvatar);
-        s.put("profileAnalyzer",         FeatureFlags.profileAnalyzer);
-        s.put("profileFollowsYouLabel",  FeatureFlags.profileFollowsYouLabel);
-        s.put("fancyBioFont",            FeatureFlags.fancyBioFont);
-        s.put("storyViewerSearch",       FeatureFlags.storyViewerSearch);
-        s.put("storyLinks",              FeatureFlags.storyLinks);
-        s.put("storyInfo",               FeatureFlags.storyInfo);
-        s.put("commentSearch",           FeatureFlags.commentSearch);
-        s.put("followListExport",        FeatureFlags.followListExport);
-        s.put("followersHistory",        FeatureFlags.followersHistory);
-        s.put("showFollowerToast",       FeatureFlags.showFollowerToast);
-        s.put("showFeatureToasts",       FeatureFlags.showFeatureToasts);
-        s.put("enableStoryMentions",     FeatureFlags.enableStoryMentions);
-
-        // Downloader
-        s.put("enablePostDownload",      FeatureFlags.enablePostDownload);
-        s.put("enableStoryDownload",     FeatureFlags.enableStoryDownload);
-        s.put("enableReelDownload",      FeatureFlags.enableReelDownload);
-        s.put("enableProfileDownload",   FeatureFlags.enableProfileDownload);
-        s.put("downloaderUsernameFolder",FeatureFlags.downloaderUsernameFolder);
-        s.put("downloaderAddTimestamp",  FeatureFlags.downloaderAddTimestamp);
-        s.put("copyMediaLink",           FeatureFlags.copyMediaLink);
-        s.put("saveInstants",            FeatureFlags.saveInstants);
-        s.put("uploadInstants",          FeatureFlags.uploadInstants);
-
+        for (Map.Entry<String, Object> d : FeatureFlags.defaults().entrySet()) {
+            if (EXCLUDED.contains(d.getKey())) continue;
+            Object v = typed(values.get(d.getKey()), d.getValue());
+            s.put(d.getKey(), v != null ? v : d.getValue());
+        }
         JSONObject root = new JSONObject();
-        root.put("version",  VERSION);
-        // Hide Specific Chats (the hidden chat list itself lives in Instagram's own files)
-        s.put("hideSpecificChats",             FeatureFlags.hideSpecificChats);
-        s.put("showHideChatButton",            FeatureFlags.showHideChatButton);
-        s.put("enableBatchHideChats",          FeatureFlags.enableBatchHideChats);
-        s.put("hideChatBackLongPress",         FeatureFlags.hideChatBackLongPress);
-        s.put("hideChatsBackLongPressSeconds", FeatureFlags.hideChatsBackLongPressSeconds);
-        s.put("emptyGeneralFolder",            FeatureFlags.emptyGeneralFolder);
-        s.put("hideDirectFoldersBar",          FeatureFlags.hideDirectFoldersBar);
-        s.put("quickToggleHideChats",          FeatureFlags.quickToggleHideChats);
-        s.put("quickToggleHideFolderBar",      FeatureFlags.quickToggleHideFolderBar);
-        s.put("quickToggleEmptyGeneral",       FeatureFlags.quickToggleEmptyGeneral);
-
-        for (String flag : ps.reso.instaeclipse.utils.feature.ExtrasFeatures.flags())
-            s.put(flag, ps.reso.instaeclipse.utils.feature.ExtrasFeatures.get(flag));
-        s.put("customShareDomain", FeatureFlags.customShareDomain);
-        s.put("exactTimestampFormat", FeatureFlags.exactTimestampFormat);
-        s.put("spoofDevice", FeatureFlags.spoofDevice);
-        s.put("spoofLabel", FeatureFlags.spoofLabel);
-        s.put("spoofRecent", FeatureFlags.spoofRecent);
-        s.put("startupTab", FeatureFlags.startupTab);
+        root.put("version", VERSION);
         root.put("settings", s);
         return root.toString(2);
     }
 
     /**
-     * Applies a backup JSON string to the in-memory FeatureFlags.
-     * Supports both the versioned {"version":1,"settings":{...}} format
-     * and a flat {key:value} format for forward-compatibility.
-     * Unknown keys are silently ignored so older backups work on newer builds.
+     * The settings in a backup file, checked and typed as stored. Reads this format, version 1
+     * files and a flat {key:value} object; unknown keys and invalid values are skipped, so older
+     * backups work on newer builds. Settings the file doesn't have are left as they are.
      */
-    public static void fromJson(String json) throws JSONException {
+    public static Map<String, Object> parse(String json) throws JSONException {
         JSONObject root = new JSONObject(json);
         JSONObject s = root.has("settings") ? root.getJSONObject("settings") : root;
-        if (s.has("startupTab") && java.util.Arrays.asList(ps.reso.instaeclipse.mods.ui.StartupTabHook.TABS)
-                .contains(s.getString("startupTab"))) FeatureFlags.startupTab = s.getString("startupTab");
-        if (s.has("spoofLabel")) FeatureFlags.spoofLabel = s.getString("spoofLabel");
-        if (s.has("spoofRecent")) FeatureFlags.spoofRecent = s.getString("spoofRecent");
-        if (s.has("customShareDomain")) FeatureFlags.customShareDomain = ShareDomain.normalize(s.getString("customShareDomain"));
-        if (s.has("exactTimestampFormat") && ps.reso.instaeclipse.utils.text.TimestampFormat.isValid(s.getString("exactTimestampFormat")))
-            FeatureFlags.exactTimestampFormat = s.getString("exactTimestampFormat");
-        if (s.has("spoofDevice") && java.util.Arrays.asList(ps.reso.instaeclipse.mods.misc.DeviceSpoofHook.DEVICES)
-                .contains(s.getString("spoofDevice"))) FeatureFlags.spoofDevice = s.getString("spoofDevice");
-        for (String flag : ps.reso.instaeclipse.utils.feature.ExtrasFeatures.flags())
-            if (s.has(flag)) ps.reso.instaeclipse.utils.feature.ExtrasFeatures.set(flag, s.getBoolean(flag));
-
-        if (s.has("isDevEnabled"))            FeatureFlags.isDevEnabled            = s.getBoolean("isDevEnabled");
-        if (s.has("removeBuildExpiredPopup")) FeatureFlags.removeBuildExpiredPopup = s.getBoolean("removeBuildExpiredPopup");
-
-        if (s.has("isGhostSeen"))            FeatureFlags.isGhostSeen            = s.getBoolean("isGhostSeen");
-        if (s.has("isGhostTyping"))          FeatureFlags.isGhostTyping          = s.getBoolean("isGhostTyping");
-        if (s.has("isGhostScreenshot"))      FeatureFlags.isGhostScreenshot      = s.getBoolean("isGhostScreenshot");
-        if (s.has("isGhostViewOnce"))        FeatureFlags.isGhostViewOnce        = s.getBoolean("isGhostViewOnce");
-        if (s.has("isGhostStory"))           FeatureFlags.isGhostStory           = s.getBoolean("isGhostStory");
-        if (s.has("isGhostLive"))            FeatureFlags.isGhostLive            = s.getBoolean("isGhostLive");
-        if (s.has("allowScreenshots"))         FeatureFlags.allowScreenshots         = s.getBoolean("allowScreenshots");
-        if (s.has("keepEphemeralMessages"))    FeatureFlags.keepEphemeralMessages    = s.getBoolean("keepEphemeralMessages");
-        if (s.has("permanentViewMode"))        FeatureFlags.permanentViewMode        = s.getBoolean("permanentViewMode");
-        if (s.has("keepUnsentMessages"))       FeatureFlags.keepUnsentMessages       = s.getBoolean("keepUnsentMessages");
-
-        if (s.has("cleanUiToggleGesture"))   FeatureFlags.cleanUiToggleGesture   = s.getInt("cleanUiToggleGesture");
-        if (s.has("ghostToggleGesture"))     FeatureFlags.ghostToggleGesture     = s.getInt("ghostToggleGesture");
-        if (s.has("secretMenuDoubleTap"))    FeatureFlags.secretMenuDoubleTap    = s.getBoolean("secretMenuDoubleTap");
-        if (s.has("isCleanUiActive"))        FeatureFlags.isCleanUiActive        = s.getBoolean("isCleanUiActive");
-        if (s.has("cleanUiSavedSnapshot"))   FeatureFlags.cleanUiSavedSnapshot   = s.getString("cleanUiSavedSnapshot");
-        if (s.has("quickToggleSeen"))        FeatureFlags.quickToggleSeen        = s.getBoolean("quickToggleSeen");
-        if (s.has("quickToggleTyping"))      FeatureFlags.quickToggleTyping      = s.getBoolean("quickToggleTyping");
-        if (s.has("quickToggleScreenshot"))  FeatureFlags.quickToggleScreenshot  = s.getBoolean("quickToggleScreenshot");
-        if (s.has("quickToggleViewOnce"))    FeatureFlags.quickToggleViewOnce    = s.getBoolean("quickToggleViewOnce");
-        if (s.has("quickToggleStory"))       FeatureFlags.quickToggleStory       = s.getBoolean("quickToggleStory");
-        if (s.has("quickToggleLive"))        FeatureFlags.quickToggleLive        = s.getBoolean("quickToggleLive");
-        if (s.has("quickToggleEphemeral"))   FeatureFlags.quickToggleEphemeral   = s.getBoolean("quickToggleEphemeral");
-        if (s.has("quickTogglePermanentView")) FeatureFlags.quickTogglePermanentView = s.getBoolean("quickTogglePermanentView");
-        if (s.has("quickToggleAllowScreenshots")) FeatureFlags.quickToggleAllowScreenshots = s.getBoolean("quickToggleAllowScreenshots");
-        if (s.has("hideSpecificChats"))         FeatureFlags.hideSpecificChats         = s.getBoolean("hideSpecificChats");
-        if (s.has("showHideChatButton"))        FeatureFlags.showHideChatButton        = s.getBoolean("showHideChatButton");
-        if (s.has("enableBatchHideChats"))      FeatureFlags.enableBatchHideChats      = s.getBoolean("enableBatchHideChats");
-        if (s.has("quickToggleHideChats"))      FeatureFlags.quickToggleHideChats      = s.getBoolean("quickToggleHideChats");
-        if (s.has("quickToggleHideFolderBar"))  FeatureFlags.quickToggleHideFolderBar  = s.getBoolean("quickToggleHideFolderBar");
-        if (s.has("quickToggleEmptyGeneral"))   FeatureFlags.quickToggleEmptyGeneral   = s.getBoolean("quickToggleEmptyGeneral");
-        if (s.has("hideChatBackLongPress"))     FeatureFlags.hideChatBackLongPress     = s.getBoolean("hideChatBackLongPress");
-        if (s.has("hideChatsBackLongPressSeconds")) FeatureFlags.hideChatsBackLongPressSeconds = s.getInt("hideChatsBackLongPressSeconds");
-        if (s.has("emptyGeneralFolder"))        FeatureFlags.emptyGeneralFolder        = s.getBoolean("emptyGeneralFolder");
-        if (s.has("hideDirectFoldersBar"))      FeatureFlags.hideDirectFoldersBar      = s.getBoolean("hideDirectFoldersBar");
-
-        if (s.has("hideSuggestionsInFeed"))     FeatureFlags.hideSuggestionsInFeed     = s.getBoolean("hideSuggestionsInFeed");
-        if (s.has("hideThreadsSuggestions"))    FeatureFlags.hideThreadsSuggestions    = s.getBoolean("hideThreadsSuggestions");
-        if (s.has("hideLikedPosts"))            FeatureFlags.hideLikedPosts            = s.getBoolean("hideLikedPosts");
-        if (s.has("confirmFeedRefresh"))        FeatureFlags.confirmFeedRefresh        = s.getBoolean("confirmFeedRefresh");
-        if (s.has("hideCommunityNotes"))        FeatureFlags.hideCommunityNotes        = s.getBoolean("hideCommunityNotes");
-        if (s.has("followingOnlyFeed"))        FeatureFlags.followingOnlyFeed        = s.getBoolean("followingOnlyFeed");
-        if (s.has("hidePlusUpsells"))           FeatureFlags.hidePlusUpsells           = s.getBoolean("hidePlusUpsells");
-        if (s.has("expandCaptions"))            FeatureFlags.expandCaptions            = s.getBoolean("expandCaptions");
-        if (s.has("offerAudioDownload"))        FeatureFlags.offerAudioDownload        = s.getBoolean("offerAudioDownload");
-        if (s.has("enableVoiceDownload"))       FeatureFlags.enableVoiceDownload       = s.getBoolean("enableVoiceDownload");
-        if (s.has("enableStickerDownload"))     FeatureFlags.enableStickerDownload     = s.getBoolean("enableStickerDownload");
-        if (s.has("storyTrayScale"))            FeatureFlags.storyTrayScale            = Math.max(30, Math.min(100, s.getInt("storyTrayScale")));
-        if (s.has("feedCornerRadius"))          FeatureFlags.feedCornerRadius          = Math.max(0, Math.min(48, s.getInt("feedCornerRadius")));
-        if (s.has("storyRingColor") && (s.getString("storyRingColor").isEmpty()
-                || ps.reso.instaeclipse.mods.ui.StoryTrayHook.parseColors(s.getString("storyRingColor")) != null))
-            FeatureFlags.storyRingColor = s.getString("storyRingColor");
-        if (s.has("enableDmMediaDownload"))     FeatureFlags.enableDmMediaDownload     = s.getBoolean("enableDmMediaDownload");
-        if (s.has("offerCopyImage"))            FeatureFlags.offerCopyImage            = s.getBoolean("offerCopyImage");
-        if (s.has("offerMediaInfo"))            FeatureFlags.offerMediaInfo            = s.getBoolean("offerMediaInfo");
-        if (s.has("offerPlaybackSpeed"))        FeatureFlags.offerPlaybackSpeed        = s.getBoolean("offerPlaybackSpeed");
-        if (s.has("maxUploadQuality"))          FeatureFlags.maxUploadQuality          = s.getBoolean("maxUploadQuality");
-        if (s.has("forceReelScrubber"))         FeatureFlags.forceReelScrubber         = s.getBoolean("forceReelScrubber");
-        if (s.has("holdLeftSlowMotion"))        FeatureFlags.holdLeftSlowMotion        = s.getBoolean("holdLeftSlowMotion");
-        if (s.has("keepEditHistory"))           FeatureFlags.keepEditHistory           = s.getBoolean("keepEditHistory");
-        if (s.has("jumpToFirstMessage"))        FeatureFlags.jumpToFirstMessage        = s.getBoolean("jumpToFirstMessage");
-        if (s.has("translateMessages"))         FeatureFlags.translateMessages         = s.getBoolean("translateMessages");
-        if (s.has("bulkUnsend"))                FeatureFlags.bulkUnsend                = s.getBoolean("bulkUnsend");
-        if (s.has("chatExport"))                FeatureFlags.chatExport                = s.getBoolean("chatExport");
-        if (s.has("hideTabHome")) FeatureFlags.hideTabHome = s.getBoolean("hideTabHome");
-        if (s.has("hideTabReels")) FeatureFlags.hideTabReels = s.getBoolean("hideTabReels");
-        if (s.has("hideTabCreate")) FeatureFlags.hideTabCreate = s.getBoolean("hideTabCreate");
-        if (s.has("hideTabMessages")) FeatureFlags.hideTabMessages = s.getBoolean("hideTabMessages");
-        if (s.has("hideTabActivity")) FeatureFlags.hideTabActivity = s.getBoolean("hideTabActivity");
-        if (s.has("hideTabProfile")) FeatureFlags.hideTabProfile = s.getBoolean("hideTabProfile");
-        if (s.has("backLeavesHome")) FeatureFlags.backLeavesHome = s.getBoolean("backLeavesHome");
-        if (s.has("hideNotesTray")) FeatureFlags.hideNotesTray = s.getBoolean("hideNotesTray");
-        if (s.has("hideDmSuggestions")) FeatureFlags.hideDmSuggestions = s.getBoolean("hideDmSuggestions");
-        if (s.has("hideInstants")) FeatureFlags.hideInstants = s.getBoolean("hideInstants");
-        if (s.has("hideDmBlend")) FeatureFlags.hideDmBlend = s.getBoolean("hideDmBlend");
-        if (s.has("readReceiptChats")) FeatureFlags.readReceiptChats = s.getBoolean("readReceiptChats");
-        if (s.has("hideThreadsButton")) FeatureFlags.hideThreadsButton = s.getBoolean("hideThreadsButton");
-
-        if (s.has("isAdBlockEnabled"))       FeatureFlags.isAdBlockEnabled       = s.getBoolean("isAdBlockEnabled");
-        if (s.has("isAnalyticsBlocked"))     FeatureFlags.isAnalyticsBlocked     = s.getBoolean("isAnalyticsBlocked");
-        if (s.has("disableTrackingLinks"))   FeatureFlags.disableTrackingLinks   = s.getBoolean("disableTrackingLinks");
-        if (s.has("openLinksExternally"))    FeatureFlags.openLinksExternally    = s.getBoolean("openLinksExternally");
-
-        if (s.has("isExtremeMode"))          FeatureFlags.isExtremeMode          = s.getBoolean("isExtremeMode");
-        if (s.has("disableStories"))         FeatureFlags.disableStories         = s.getBoolean("disableStories");
-        if (s.has("disableFeed"))            FeatureFlags.disableFeed            = s.getBoolean("disableFeed");
-        if (s.has("disableReels"))           FeatureFlags.disableReels           = s.getBoolean("disableReels");
-        if (s.has("disableReelsExceptDM"))   FeatureFlags.disableReelsExceptDM   = s.getBoolean("disableReelsExceptDM");
-        if (s.has("disableExplore"))         FeatureFlags.disableExplore         = s.getBoolean("disableExplore");
-        if (s.has("disableComments"))        FeatureFlags.disableComments        = s.getBoolean("disableComments");
-        if (s.has("disableDiscoverPeople"))  FeatureFlags.disableDiscoverPeople  = s.getBoolean("disableDiscoverPeople");
-
-        if (s.has("disableStoryFlipping"))   FeatureFlags.disableStoryFlipping   = s.getBoolean("disableStoryFlipping");
-        if (s.has("disableVideoAutoPlay"))   FeatureFlags.disableVideoAutoPlay   = s.getBoolean("disableVideoAutoPlay");
-        if (s.has("spoofLastSeen"))          FeatureFlags.spoofLastSeen          = s.getBoolean("spoofLastSeen");
-        if (s.has("disableSearchHistory"))   FeatureFlags.disableSearchHistory   = s.getBoolean("disableSearchHistory");
-        if (s.has("confirmCalls"))           FeatureFlags.confirmCalls           = s.getBoolean("confirmCalls");
-        if (s.has("spoofLocation"))          FeatureFlags.spoofLocation          = s.getBoolean("spoofLocation");
-        if (s.has("spoofLat"))               FeatureFlags.spoofLat               = parseDouble(s.get("spoofLat"), 0.0);
-        if (s.has("spoofLng"))               FeatureFlags.spoofLng               = parseDouble(s.get("spoofLng"), 0.0);
-        if (s.has("forceReelQuality"))        FeatureFlags.forceReelQuality       = s.getInt("forceReelQuality");
-        if (s.has("disableRepost"))          FeatureFlags.disableRepost          = s.getBoolean("disableRepost");
-        if (s.has("hideShareCreateGroup"))   FeatureFlags.hideShareCreateGroup   = s.getBoolean("hideShareCreateGroup");
-        if (s.has("exactTimestamps"))        FeatureFlags.exactTimestamps        = s.getBoolean("exactTimestamps");
-        if (s.has("likeUndo"))               FeatureFlags.likeUndo               = s.getBoolean("likeUndo");
-        if (s.has("confirmLikes"))           FeatureFlags.confirmLikes           = s.getBoolean("confirmLikes");
-        if (s.has("confirmFollows"))         FeatureFlags.confirmFollows         = s.getBoolean("confirmFollows");
-        if (s.has("profileMenuTools"))       FeatureFlags.profileMenuTools       = s.getBoolean("profileMenuTools");
-        if (s.has("postCountSpoof"))         FeatureFlags.postCountSpoof         = s.getBoolean("postCountSpoof");
-        if (s.has("profileSpoofer"))         FeatureFlags.profileSpoofer         = s.getBoolean("profileSpoofer");
-        if (s.has("spoofFollowers"))         FeatureFlags.spoofFollowers         = Math.max(-1, s.getInt("spoofFollowers"));
-        if (s.has("spoofFollowing"))         FeatureFlags.spoofFollowing         = Math.max(-1, s.getInt("spoofFollowing"));
-        if (s.has("spoofPosts"))             FeatureFlags.spoofPosts             = Math.max(-1, s.getInt("spoofPosts"));
-        if (s.has("spoofVerified"))          FeatureFlags.spoofVerified          = s.getBoolean("spoofVerified");
-        if (s.has("spoofName"))              FeatureFlags.spoofName              = s.getString("spoofName");
-        if (s.has("spoofUsername"))          FeatureFlags.spoofUsername          = s.getString("spoofUsername");
-        if (s.has("spoofBio"))               FeatureFlags.spoofBio               = s.getString("spoofBio");
-        if (s.has("spoofAvatar") && ps.reso.instaeclipse.utils.profile.SpoofAvatar.isValid(s.getString("spoofAvatar")))
-            FeatureFlags.spoofAvatar = s.getString("spoofAvatar");
-        if (s.has("profileAnalyzer"))        FeatureFlags.profileAnalyzer        = s.getBoolean("profileAnalyzer");
-        if (s.has("profileFollowsYouLabel")) FeatureFlags.profileFollowsYouLabel = s.getBoolean("profileFollowsYouLabel");
-        if (s.has("fancyBioFont"))           FeatureFlags.fancyBioFont           = s.getBoolean("fancyBioFont");
-        if (s.has("storyViewerSearch"))      FeatureFlags.storyViewerSearch      = s.getBoolean("storyViewerSearch");
-        if (s.has("storyLinks"))             FeatureFlags.storyLinks             = s.getBoolean("storyLinks");
-        if (s.has("storyInfo"))              FeatureFlags.storyInfo              = s.getBoolean("storyInfo");
-        if (s.has("commentSearch"))          FeatureFlags.commentSearch          = s.getBoolean("commentSearch");
-        if (s.has("followListExport"))       FeatureFlags.followListExport       = s.getBoolean("followListExport");
-        if (s.has("followersHistory"))       FeatureFlags.followersHistory       = s.getBoolean("followersHistory");
-        if (s.has("showFollowerToast"))      FeatureFlags.showFollowerToast      = s.getBoolean("showFollowerToast");
-        if (s.has("showFeatureToasts"))      FeatureFlags.showFeatureToasts      = s.getBoolean("showFeatureToasts");
-        if (s.has("enableStoryMentions"))    FeatureFlags.enableStoryMentions    = s.getBoolean("enableStoryMentions");
-
-        if (s.has("enablePostDownload"))     FeatureFlags.enablePostDownload     = s.getBoolean("enablePostDownload");
-        if (s.has("enableStoryDownload"))    FeatureFlags.enableStoryDownload    = s.getBoolean("enableStoryDownload");
-        if (s.has("enableReelDownload"))     FeatureFlags.enableReelDownload     = s.getBoolean("enableReelDownload");
-        if (s.has("enableProfileDownload"))  FeatureFlags.enableProfileDownload  = s.getBoolean("enableProfileDownload");
-        if (s.has("downloaderUsernameFolder")) FeatureFlags.downloaderUsernameFolder = s.getBoolean("downloaderUsernameFolder");
-        if (s.has("downloaderAddTimestamp")) FeatureFlags.downloaderAddTimestamp  = s.getBoolean("downloaderAddTimestamp");
-        if (s.has("copyMediaLink"))          FeatureFlags.copyMediaLink          = s.getBoolean("copyMediaLink");
-        if (s.has("saveInstants"))           FeatureFlags.saveInstants           = s.getBoolean("saveInstants");
-        if (s.has("uploadInstants"))         FeatureFlags.uploadInstants         = s.getBoolean("uploadInstants");
+        // Version 1: the downloader choice was stored the other way round.
+        if (s.has("downloaderUseOriginal") && !s.has("downloaderCustomQuality"))
+            s.put("downloaderCustomQuality", !s.optBoolean("downloaderUseOriginal", true));
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Object> defaults = FeatureFlags.defaults();
+        for (Iterator<String> it = s.keys(); it.hasNext(); ) {
+            String key = it.next();
+            Object like = defaults.get(key);
+            if (like == null || EXCLUDED.contains(key)) continue;
+            Object v = typed(s.get(key), like);
+            if (v == null) continue;
+            v = checked(key, v);
+            if (v != null) out.put(key, v);
+        }
+        return out;
     }
 
-    private static double parseDouble(Object raw, double fallback) {
-        if (raw instanceof Number) return ((Number) raw).doubleValue();
-        if (raw instanceof String) {
-            try {
-                return Double.parseDouble((String) raw);
-            } catch (Throwable ignored) {}
+    /** {@code v} as the stored type of a setting like {@code like}; doubles are stored as text. */
+    private static Object typed(Object v, Object like) {
+        if (v == null || like == null) return null;
+        if (like instanceof Boolean) return v instanceof Boolean ? v : null;
+        if (like instanceof Integer) return v instanceof Number ? (Object) ((Number) v).intValue() : null;
+        if (like instanceof String) {
+            if (v instanceof String) return v;
+            return v instanceof Number ? String.valueOf(((Number) v).doubleValue()) : null;
         }
-        return fallback;
+        return null;
+    }
+
+    /** The value to restore for {@code key}, clamped or normalised; null if it isn't valid. */
+    private static Object checked(String key, Object v) {
+        switch (key) {
+            case "startupTab":
+                return v.equals("") || Arrays.asList(ps.reso.instaeclipse.mods.ui.StartupTabHook.TABS).contains(v) ? v : null;
+            case "customShareDomain":
+                return v.equals("") ? v : ShareDomain.normalize((String) v);
+            case "exactTimestampFormat":
+                return v.equals("") || ps.reso.instaeclipse.utils.text.TimestampFormat.isValid((String) v) ? v : null;
+            case "spoofDevice":
+                return v.equals("") || Arrays.asList(ps.reso.instaeclipse.mods.misc.DeviceSpoofHook.DEVICES).contains(v) ? v : null;
+            case "spoofAvatar":
+                return v.equals("") || ps.reso.instaeclipse.utils.profile.SpoofAvatar.isValid((String) v) ? v : null;
+            case "storyRingColor":
+                return v.equals("") || ps.reso.instaeclipse.mods.ui.StoryTrayHook.parseColors((String) v) != null ? v : null;
+            case "spoofLat":
+            case "spoofLng":
+                try {
+                    return String.valueOf(Double.parseDouble((String) v));
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            case "storyTrayScale":
+                return Math.max(30, Math.min(100, (Integer) v));
+            case "feedCornerRadius":
+                return Math.max(0, Math.min(48, (Integer) v));
+            case "spoofFollowers":
+            case "spoofFollowing":
+            case "spoofPosts":
+                return Math.max(-1, (Integer) v);
+            case SettingsProfiles.KEY:
+                return v.equals("") || !SettingsProfiles.parse((String) v).isEmpty() ? v : null;
+            default:
+                return v;
+        }
     }
 }

@@ -14,6 +14,7 @@ import java.util.WeakHashMap;
 
 import ps.reso.instaeclipse.R;
 import ps.reso.instaeclipse.utils.dialog.IeDialog;
+import ps.reso.instaeclipse.utils.feature.FeatureFlags;
 import ps.reso.instaeclipse.utils.i18n.I18n;
 import ps.reso.instaeclipse.utils.log.ModuleLog;
 
@@ -44,8 +45,8 @@ final class ThreadHeaderMenu {
     static boolean add(Activity a, String key, CharSequence label, Runnable action) {
         try {
             View btn = a.getWindow().getDecorView().findViewWithTag(TAG);
-            // Clean UI: no header button (true, so callers stop retrying for this chat).
-            if (ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.isActive()) {
+            // Menu off: no header button (true, so callers stop retrying for this chat).
+            if (!FeatureFlags.chatHeaderMenu) {
                 if (btn != null && btn.getParent() instanceof ViewGroup g) g.removeView(btn);
                 return true;
             }
@@ -106,7 +107,7 @@ final class ThreadHeaderMenu {
         btn.setOnClickListener(v -> show(v));
         try { target.addView(btn, Math.min(insertAt, target.getChildCount())); }
         catch (Throwable t) { target.addView(btn); }
-        ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(btn);
+        ps.reso.instaeclipse.mods.ui.utils.InjectedUi.track(btn, () -> FeatureFlags.chatHeaderMenu);
         ModuleLog.line("(IE|ThreadMenu) ✅ button injected in " + target.getClass().getSimpleName());
         return btn;
     }

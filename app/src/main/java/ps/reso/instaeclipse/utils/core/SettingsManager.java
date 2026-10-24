@@ -68,7 +68,7 @@ public class SettingsManager {
         editor.putBoolean("showHideChatButton", FeatureFlags.showHideChatButton);
         editor.putBoolean("showDeletedMessagesButton", FeatureFlags.showDeletedMessagesButton);
         editor.putBoolean("keepUnsentInChat", FeatureFlags.keepUnsentInChat);
-        editor.putBoolean("downloaderUseOriginal", FeatureFlags.downloaderUseOriginal);
+        editor.putBoolean("downloaderCustomQuality", FeatureFlags.downloaderCustomQuality);
         editor.putInt("downloaderQualityMaxShortSide", FeatureFlags.downloaderQualityMaxShortSide);
         editor.putInt("storyTrayScale", FeatureFlags.storyTrayScale);
         editor.putInt("feedCornerRadius", FeatureFlags.feedCornerRadius);
@@ -80,8 +80,14 @@ public class SettingsManager {
         // Quick Toggles
         editor.putInt("cleanUiToggleGesture", FeatureFlags.cleanUiToggleGesture);
         editor.putInt("ghostToggleGesture", FeatureFlags.ghostToggleGesture);
-        editor.putBoolean("isCleanUiActive", FeatureFlags.isCleanUiActive);
-        editor.putString("cleanUiSavedSnapshot", FeatureFlags.cleanUiSavedSnapshot);
+        editor.putString(SettingsProfiles.KEY, FeatureFlags.settingsProfiles);
+        editor.putBoolean("profileSwitchVibrate", FeatureFlags.profileSwitchVibrate);
+        editor.putBoolean("profileSwitchShowName", FeatureFlags.profileSwitchShowName);
+        editor.putBoolean("ghostSeenButton", FeatureFlags.ghostSeenButton);
+        editor.putBoolean("ghostInboxTint", FeatureFlags.ghostInboxTint);
+        editor.putBoolean("lockCollectionsButton", FeatureFlags.lockCollectionsButton);
+        editor.putBoolean("postCountsMenu", FeatureFlags.postCountsMenu);
+        editor.putBoolean("chatHeaderMenu", FeatureFlags.chatHeaderMenu);
         editor.putBoolean("quickToggleSeen", FeatureFlags.quickToggleSeen);
         editor.putBoolean("quickToggleTyping", FeatureFlags.quickToggleTyping);
         editor.putBoolean("quickToggleScreenshot", FeatureFlags.quickToggleScreenshot);
@@ -284,6 +290,7 @@ public class SettingsManager {
         if (prefs == null) {
             prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         }
+        endCleanUi();
 
         FeatureFlags.isDevEnabled = prefs.getBoolean("isDevEnabled", false);
 
@@ -321,20 +328,30 @@ public class SettingsManager {
         FeatureFlags.showHideChatButton = prefs.getBoolean("showHideChatButton", false);
         FeatureFlags.showDeletedMessagesButton = prefs.getBoolean("showDeletedMessagesButton", false);
         FeatureFlags.keepUnsentInChat = prefs.getBoolean("keepUnsentInChat", false);
-        FeatureFlags.downloaderUseOriginal = prefs.getBoolean("downloaderUseOriginal", true);
+        // Was "downloaderUseOriginal" (on by default), turned around so every setting starts off.
+        FeatureFlags.downloaderCustomQuality = prefs.getBoolean("downloaderCustomQuality", !prefs.getBoolean("downloaderUseOriginal", true));
         FeatureFlags.downloaderQualityMaxShortSide = prefs.getInt("downloaderQualityMaxShortSide", 0);
         FeatureFlags.storyTrayScale = prefs.getInt("storyTrayScale", 100);
         FeatureFlags.feedCornerRadius = prefs.getInt("feedCornerRadius", 0);
         FeatureFlags.storyRingColor = prefs.getString("storyRingColor", "");
         FeatureFlags.downloaderCompatibility = prefs.getBoolean("downloaderCompatibility", false);
         FeatureFlags.downloaderAllowFallback = prefs.getBoolean("downloaderAllowFallback", false);
-        FeatureFlags.lockUseFingerprint = prefs.getBoolean("lockUseFingerprint", true);
+        FeatureFlags.lockUseFingerprint = prefs.getBoolean("lockUseFingerprint", false);
 
         // Quick Toggles
         FeatureFlags.cleanUiToggleGesture = prefs.getInt("cleanUiToggleGesture", 0);
         FeatureFlags.ghostToggleGesture = prefs.getInt("ghostToggleGesture", 1);
-        FeatureFlags.isCleanUiActive = prefs.getBoolean("isCleanUiActive", false);
-        FeatureFlags.cleanUiSavedSnapshot = prefs.getString("cleanUiSavedSnapshot", "");
+        FeatureFlags.settingsProfiles = prefs.getString("settingsProfiles", "");
+        FeatureFlags.profileSwitchVibrate = prefs.getBoolean("profileSwitchVibrate", false);
+        FeatureFlags.profileSwitchShowName = prefs.getBoolean("profileSwitchShowName", false);
+        // New switches for buttons Clean UI used to hide: on an update they keep showing what
+        // they showed before (a fresh install has no "isGhostSeen" yet, so they start off).
+        boolean update = prefs.contains("isGhostSeen");
+        FeatureFlags.ghostSeenButton = prefs.getBoolean("ghostSeenButton", update && prefs.getBoolean("isGhostSeen", false));
+        FeatureFlags.ghostInboxTint = prefs.getBoolean("ghostInboxTint", update);
+        FeatureFlags.lockCollectionsButton = prefs.getBoolean("lockCollectionsButton", update && prefs.getBoolean("lockSavedCollections", false));
+        FeatureFlags.postCountsMenu = prefs.getBoolean("postCountsMenu", update && prefs.getBoolean("postCountSpoof", false));
+        FeatureFlags.chatHeaderMenu = prefs.getBoolean("chatHeaderMenu", update);
         FeatureFlags.quickToggleSeen = prefs.getBoolean("quickToggleSeen", false);
         FeatureFlags.quickToggleTyping = prefs.getBoolean("quickToggleTyping", false);
         FeatureFlags.quickToggleScreenshot = prefs.getBoolean("quickToggleScreenshot", false);
@@ -498,7 +515,57 @@ public class SettingsManager {
             if (appliedHideState != null && appliedHideState != FeatureFlags.hideSpecificChats)
                 ps.reso.instaeclipse.mods.ghost.HideChatsHook.refreshKnownAccounts();
             appliedHideState = FeatureFlags.hideSpecificChats;
+            // First run (or an update): the current settings become the first profile.
+            if (SettingsProfiles.parse(FeatureFlags.settingsProfiles).isEmpty()) {
+                FeatureFlags.settingsProfiles = SettingsProfiles.create(ps.reso.instaeclipse.utils.i18n.I18n.t(
+                        context, ps.reso.instaeclipse.R.string.profiles_default_name, 1)).serialize();
+                saveAllFlags();
+            }
         }
+    }
+
+    /** Clean UI (replaced by settings profiles) was on: the switches it turned off come back on. */
+    private static void endCleanUi() {
+        if (!prefs.contains("isCleanUiActive") && !prefs.contains("cleanUiSavedSnapshot")) return;
+        SharedPreferences.Editor e = prefs.edit();
+        if (prefs.getBoolean("isCleanUiActive", false)) {
+            try {
+                org.json.JSONObject saved = new org.json.JSONObject(prefs.getString("cleanUiSavedSnapshot", ""));
+                for (java.util.Iterator<String> it = saved.keys(); it.hasNext(); ) {
+                    String key = it.next();
+                    if (saved.optBoolean(key, false)) e.putBoolean(key, true);
+                }
+            } catch (Throwable ignored) {}
+        }
+        e.remove("isCleanUiActive").remove("cleanUiSavedSnapshot").commit();
+    }
+
+    /** Every stored setting (key -> Boolean / Integer / String), with the in-memory values saved first. */
+    public static java.util.Map<String, Object> currentValues() {
+        if (prefs == null) return new java.util.HashMap<>();
+        saveAllFlags();
+        return new java.util.HashMap<>(prefs.getAll());
+    }
+
+    /**
+     * Writes several settings at once (profile switch, restore) and loads them, stamped as changed
+     * here and pushed to the companion like any in-app change. Values are typed as stored:
+     * Boolean / Integer / String (doubles as text).
+     */
+    public static void applyValues(java.util.Map<String, ?> values) {
+        if (prefs == null || values == null || values.isEmpty()) return;
+        java.util.Map<String, ?> before = new java.util.HashMap<>(prefs.getAll());
+        SharedPreferences.Editor e = prefs.edit();
+        for (java.util.Map.Entry<String, ?> v : values.entrySet()) {
+            Object value = v.getValue();
+            if (value instanceof Boolean) e.putBoolean(v.getKey(), (Boolean) value);
+            else if (value instanceof Integer) e.putInt(v.getKey(), (Integer) value);
+            else if (value instanceof String) e.putString(v.getKey(), (String) value);
+        }
+        e.commit();
+        loadAllFlags(appContext);
+        stampChangedKeys(before);
+        CompanionSync.pushAsync(appContext);
     }
 
     private static double readDoublePref(SharedPreferences p, String key, double fallback) {

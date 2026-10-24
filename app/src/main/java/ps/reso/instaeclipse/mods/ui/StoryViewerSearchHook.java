@@ -159,7 +159,7 @@ public class StoryViewerSearchHook {
             lp.setMargins(m, m / 2, m, m / 2);
             try {
                 parent.addView(et, parent.indexOfChild(list), lp);
-                ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.trackInjectedView(et);
+                ps.reso.instaeclipse.mods.ui.utils.InjectedUi.track(et, () -> FeatureFlags.storyViewerSearch);
                 ModuleLog.line(TAG + "search box added in " + parent.getClass().getSimpleName());
             } catch (Throwable t) {
                 ModuleLog.line(TAG + "⚠️ add box: " + t);

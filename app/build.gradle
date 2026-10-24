@@ -66,6 +66,7 @@ dependencies {
     implementation libs.fileprefs
     // Testing dependencies
     testImplementation libs.junit
+    testImplementation "org.json:json:20240303" // Android's org.json is a stub in local unit tests
     testRuntimeOnly files('libs/api-82.jar')
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core.v361

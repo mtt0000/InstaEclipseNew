@@ -109,7 +109,7 @@ final class SelectedMediaDownloads {
         return new Captured(SelectedMediaAdapter.capture(ctx, media, type), type,
                 new DownloadRequest.Options(FeatureFlags.downloaderQualityMaxShortSide,
                         FeatureFlags.downloaderCompatibility, FeatureFlags.downloaderAllowFallback),
-                FeatureFlags.downloaderUseOriginal, offerAudioDownload);
+                !FeatureFlags.downloaderCustomQuality, offerAudioDownload);
     }
 
     static void captureAndShowPost(Context ctx, Object media, String type) {

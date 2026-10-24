@@ -38,8 +38,8 @@ public class GhostDMMarkAsReadHook {
                 protected void afterHookedMethod(MethodHookParam param) { ps.reso.instaeclipse.utils.core.JitGuard.tick(param.method);
                     // Bail immediately if the feature is off — this hook fires for every
                     // view attachment in the entire app, so the fast path must be trivial.
-                    // Clean UI: no injected button (Ghost seen itself keeps working).
-                    if (!FeatureFlags.isGhostSeen || FeatureFlags.isCleanUiActive) return;
+                    // Button off: Ghost seen itself keeps working.
+                    if (!FeatureFlags.isGhostSeen || !FeatureFlags.ghostSeenButton) return;
 
                     View view = (View) param.thisObject;
 
