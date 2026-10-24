@@ -28,8 +28,8 @@ public class GhostEmojiManager {
 
             sTintedView = iv;
 
-            // Clean UI: no gold tint on the inbox icon (Ghost Mode itself is unchanged).
-            if (showGhost && !ps.reso.instaeclipse.mods.ui.utils.CleanUiManager.isActive()) {
+            // Tint off: Ghost Mode itself is unchanged.
+            if (showGhost && ps.reso.instaeclipse.utils.feature.FeatureFlags.ghostInboxTint) {
                 iv.setColorFilter(Color.parseColor("#FFD700"), PorterDuff.Mode.SRC_ATOP);
             } else {
                 iv.clearColorFilter();

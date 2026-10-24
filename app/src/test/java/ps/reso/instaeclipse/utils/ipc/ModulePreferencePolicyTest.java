@@ -54,20 +54,20 @@ public class ModulePreferencePolicyTest {
 
     @Test public void downloaderModeParticipatesInBooleanSchemaAndUpdates() {
         for (boolean original : new boolean[]{false, true}) {
-            assertTrue(ModuleReplies.isPreferenceValue("downloaderUseOriginal", original));
-            assertTrue(ModuleReplies.isPreferenceUpdate(BOOLEAN, "downloaderUseOriginal", original));
-            assertFalse(ModuleReplies.isPreferenceUpdate(STRING, "downloaderUseOriginal", original));
-            assertFalse(ModuleReplies.isPreferenceUpdate(INTEGER, "downloaderUseOriginal", original));
+            assertTrue(ModuleReplies.isPreferenceValue("downloaderCustomQuality", original));
+            assertTrue(ModuleReplies.isPreferenceUpdate(BOOLEAN, "downloaderCustomQuality", original));
+            assertFalse(ModuleReplies.isPreferenceUpdate(STRING, "downloaderCustomQuality", original));
+            assertFalse(ModuleReplies.isPreferenceUpdate(INTEGER, "downloaderCustomQuality", original));
         }
     }
 
     @Test public void downloaderModeRejectsCoercionAndUnknownModeKeys() {
         for (Object value : new Object[]{"true", "false", "Original", 0, 1, 1L, null}) {
-            assertFalse(ModuleReplies.isPreferenceValue("downloaderUseOriginal", value));
-            assertFalse(ModuleReplies.isPreferenceUpdate(BOOLEAN, "downloaderUseOriginal", value));
+            assertFalse(ModuleReplies.isPreferenceValue("downloaderCustomQuality", value));
+            assertFalse(ModuleReplies.isPreferenceUpdate(BOOLEAN, "downloaderCustomQuality", value));
         }
-        assertFalse(ModuleReplies.isPreferenceUpdate(STRING, "downloaderUseOriginal", "true"));
-        assertFalse(ModuleReplies.isPreferenceUpdate(INTEGER, "downloaderUseOriginal", 1));
+        assertFalse(ModuleReplies.isPreferenceUpdate(STRING, "downloaderCustomQuality", "true"));
+        assertFalse(ModuleReplies.isPreferenceUpdate(INTEGER, "downloaderCustomQuality", 1));
         assertFalse(ModuleReplies.isPreferenceUpdate(BOOLEAN, "synthetic_unknown_downloader_mode", true));
         assertFalse(ModuleReplies.isPreferenceValue("synthetic_unknown_downloader_mode", false));
     }

@@ -918,6 +918,20 @@ public class Module {
                     IgThemeEngine.invalidate();
                     IgThemeHook.refreshCurrentActivity();
 
+                } else if (ps.reso.instaeclipse.utils.core.CompanionSync.ACTION_PULL.equals(action)) {
+                    // Several settings at once from the companion (profile switch, restore, turn off
+                    // all injections): applied together, the screen updated once.
+                    new Thread(() -> {
+                        if (!ps.reso.instaeclipse.utils.core.CompanionSync.pull(ctx, true)) return;
+                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                            ps.reso.instaeclipse.mods.extras.AirplaneModeHook.apply();
+                            IgThemeEngine.invalidate();
+                            IgThemeHook.refreshCurrentActivity();
+                            ps.reso.instaeclipse.mods.ui.utils.InjectedUi.refreshScreen(
+                                    ps.reso.instaeclipse.mods.ui.UIHookManager.getCurrentActivity());
+                        });
+                    }, "IE-PullPrefs").start();
+
                 } else if (CommonUtils.ACTION_REQUEST_LOGS.equals(action)) {
                     // Re-attach/rewrite the companion-side mirror file first (covers the companion
                     // having cleared its data), then reply; the companion re-reads the file on
@@ -1022,6 +1036,7 @@ public class Module {
         filter.addAction("ps.reso.instaeclipse.ACTION_UPDATE_PREF");
         filter.addAction("ps.reso.instaeclipse.ACTION_UPDATE_PREF_STRING");
         filter.addAction("ps.reso.instaeclipse.ACTION_UPDATE_PREF_INT");
+        filter.addAction(ps.reso.instaeclipse.utils.core.CompanionSync.ACTION_PULL);
         filter.addAction(CommonUtils.ACTION_REQUEST_LOGS);
         filter.addAction(CommonUtils.ACTION_CLEAR_LOGS);
         filter.addAction("ps.reso.instaeclipse.ACTION_REQUEST_PREFS");

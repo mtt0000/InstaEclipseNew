@@ -10,14 +10,11 @@
     <string name="ig_direct_empty_general_folder">Mostra cartella \'Generale\' vuota</string>
     <string name="ig_direct_hide_folders_bar">Nascondi barra delle cartelle</string>
 
-    <!-- Clean UI Quick Toggle -->
-    <string name="clean_ui_toggle_title">Quick Toggle Pulsanti UI</string>
+    <!-- Nav bar shortcut gestures -->
     <string name="clean_ui_gesture_mode">Scorciatoia Tasto Home</string>
     <string name="clean_ui_gesture_off">Disattivato</string>
     <string name="clean_ui_gesture_long_press">Pressione prolungata</string>
     <string name="clean_ui_gesture_double_tap_long">2 Tap + Pressione prolungata</string>
-    <string name="clean_ui_toast_on">Clean UI: Attivata (Pulsanti nascosti)</string>
-    <string name="clean_ui_toast_off">Clean UI: Disattivata (Pulsanti ripristinati)</string>
 
     <!-- Secret Menu, Batch Hide & App Disguise -->
     <string name="ig_dialog_secret_menu_trigger">Apertura Menù Segreto</string>
@@ -39,7 +36,7 @@
     <string name="menu_nav_shortcuts">Scorciatoie barra di navigazione</string>
     <string name="nav_shortcut_search">Cerca: apri il menù InstaEclipse</string>
     <string name="nav_shortcut_direct">Messaggi: attiva/disattiva Ghost Mode</string>
-    <string name="nav_shortcut_home">Home: attiva/disattiva Clean UI</string>
+    <string name="nav_shortcut_home">Home: profilo impostazioni successivo</string>
 
     <!-- Hide Specific Chats > batch hide (inbox header button) -->
     <string name="ig_batch_hide_title">Nascondi chat</string>
@@ -54,4 +51,40 @@
     <string name="ig_folders_diag_hint">Attiva Nascondi barra delle cartelle, apri una volta i Direct, poi torna qui e tocca Copia.</string>
     <string name="ig_folders_diag_copy">Copia</string>
     <string name="ig_folders_diag_copied">Copiato</string>
+
+    <!-- Settings profiles and Turn off all injections -->
+    <string name="profiles_group">Profili</string>
+    <string name="profiles_title">Profili impostazioni</string>
+    <string name="profiles_default_name">Profilo %1$d</string>
+    <string name="profiles_need_two">Crea un secondo profilo impostazioni per cambiarlo con Home</string>
+    <string name="profiles_switched">Profilo: %1$s</string>
+    <string name="profiles_list">Profili</string>
+    <string name="profiles_active_row">%1$s · attivo</string>
+    <string name="profiles_new">Nuovo profilo</string>
+    <string name="profiles_hint">Il profilo attivo sono le impostazioni attuali: quello che cambi nel menu viene salvato lì. Home (Navigazione › Scorciatoie barra di navigazione) passa al profilo successivo.</string>
+    <string name="profiles_confirm_section">Al cambio profilo</string>
+    <string name="profiles_confirm_vibrate">Vibrazione</string>
+    <string name="profiles_confirm_name">Mostra il nome del profilo</string>
+    <string name="profiles_action_activate">Attiva</string>
+    <string name="profiles_action_edit">Modifica (attiva e apri le impostazioni)</string>
+    <string name="profiles_action_rename">Rinomina</string>
+    <string name="profiles_action_clone">Clona</string>
+    <string name="profiles_action_reset">Reset (tutto spento)</string>
+    <string name="profiles_action_delete">Elimina</string>
+    <string name="profiles_copy_name">%1$s (copia)</string>
+    <string name="profiles_reset_confirm">Spegnere tutte le impostazioni di \"%1$s\"? Instagram funzionerà come senza il modulo. Scorciatoie, travestimento dell\'app e codice di blocco restano come sono.</string>
+    <string name="profiles_delete_confirm">Eliminare il profilo \"%1$s\"?</string>
+    <string name="profiles_cant_delete">Non si possono eliminare il profilo attivo e l\'ultimo rimasto</string>
+    <string name="profiles_name_hint">Nome del profilo</string>
+    <string name="profiles_open_instagram">Apri Instagram una volta per preparare i profili</string>
+    <string name="injections_off_title">Disattiva tutte le iniezioni</string>
+    <string name="injections_off_sub">Tutti i pulsanti, le voci e le etichette aggiunti dal modulo</string>
+    <string name="injections_off_confirm">Spegne tutti gli interruttori che aggiungono solo un pulsante, una voce di menu o un\'etichetta a Instagram. Le funzioni vere e proprie (Ghost Mode, blocchi, contatori…) hanno i loro interruttori e restano come sono.</string>
+    <string name="injections_off_action">Disattiva</string>
+    <string name="injections_off_done">Iniezioni disattivate</string>
+    <string name="ie_ghost_seen_button">Pulsante \"Segna come letto\"</string>
+    <string name="ie_ghost_inbox_tint">Icona Messaggi dorata con Ghost Mode</string>
+    <string name="ie_chat_header_menu">Menu ⋮ nell\'intestazione della chat</string>
+    <string name="ie_lock_collections_button">Pulsante 🔒 sulle collezioni salvate</string>
+    <string name="ie_post_counts_menu">Voce \"Modifica contatori\" nel menu dei post</string>
 </resources>

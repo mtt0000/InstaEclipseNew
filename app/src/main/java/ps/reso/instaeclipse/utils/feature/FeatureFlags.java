@@ -6,7 +6,7 @@ public class FeatureFlags {
     public static volatile boolean showHideChatButton = false;
     public static volatile boolean showDeletedMessagesButton = false;
     public static volatile boolean keepUnsentInChat = false;
-    public static volatile boolean downloaderUseOriginal = true;
+    public static volatile boolean downloaderCustomQuality = false; // Off = Instagram's original selection, On = quality ceiling below
     public static volatile int downloaderQualityMaxShortSide = 0;
     public static volatile int feedCornerRadius = 0;       // rounded feed post corners in dp (#276), 0 = square
     public static volatile int storyTrayScale = 100;       // story tray size in percent (#283), 100 = Instagram's
@@ -45,7 +45,7 @@ public class FeatureFlags {
     public static volatile boolean lockWholeApp = false; // lock the ENTIRE app on launch/return (same passcode as Lock DMs)
     public static volatile boolean lockSavedCollections = false; // #219: 🔒 button on saved collections
     public static volatile String lockedCollections = "";         // #219: locked saved collection ids (comma-separated)
-    public static volatile boolean lockUseFingerprint = true; // offer biometric unlock when the device has one enrolled
+    public static volatile boolean lockUseFingerprint = false; // offer biometric unlock when the device has one enrolled
     // Customize navigation bar (#238): hide individual bottom-nav tabs.
     public static volatile boolean hideTabHome = false;
     public static volatile boolean hideTabReels = false;
@@ -104,10 +104,20 @@ public class FeatureFlags {
     public static volatile boolean hideDirectFoldersBar = false;
 
     // Nav bar shortcuts (NavGestureBinder): 0 = Off, 1 = Long Press, 2 = 2 Taps + Long Press
-    public static volatile int cleanUiToggleGesture = 0; // Home button: Clean UI quick toggle
+    public static volatile int cleanUiToggleGesture = 0; // Home button: switch to the next settings profile
     public static volatile int ghostToggleGesture = 1;   // Messages / inbox button: Ghost Mode quick toggle
-    public static volatile boolean isCleanUiActive = false;
-    public static volatile String cleanUiSavedSnapshot = "";
+
+    // Settings profiles (SettingsProfiles): the saved profiles, and how a switch is confirmed
+    public static volatile String settingsProfiles = "";
+    public static volatile boolean profileSwitchVibrate = false;
+    public static volatile boolean profileSwitchShowName = false;
+
+    // Buttons whose feature keeps working without them (InjectedUi turns them off with the rest)
+    public static volatile boolean ghostSeenButton = false;      // "Mark as read" in chats and channels
+    public static volatile boolean ghostInboxTint = false;       // gold Messages icon while Ghost Mode is on
+    public static volatile boolean lockCollectionsButton = false; // 🔒 on saved collections
+    public static volatile boolean postCountsMenu = false;       // "Edit counts" in the post ⋮ menu
+    public static volatile boolean chatHeaderMenu = false;       // ⋮ menu in the chat header (deleted messages, hide, export, jump, read receipts)
 
     // Which ghost mode features the quick toggle will control
     public static volatile boolean quickToggleSeen = false;
@@ -227,4 +237,29 @@ public class FeatureFlags {
     public static volatile String  customEmojiPath = "";        // path to the user-picked EmojiCompat emoji font
     public static volatile String  downloaderCustomPath = "";   // human-readable display path
     public static volatile String  downloaderCustomUri  = "";   // SAF tree URI string for actual writes
+
+    /** Every setting's initial value, by field name (doubles as text, the way they are stored).
+     *  Declared last: static initialisers run in order, so this sees the values above untouched. */
+    private static final java.util.Map<String, Object> DEFAULTS = captureDefaults();
+
+    public static java.util.Map<String, Object> defaults() {
+        return DEFAULTS;
+    }
+
+    private static java.util.Map<String, Object> captureDefaults() {
+        java.util.Map<String, Object> out = new java.util.TreeMap<>();
+        for (java.lang.reflect.Field f : FeatureFlags.class.getDeclaredFields()) {
+            int mod = f.getModifiers();
+            if (!java.lang.reflect.Modifier.isStatic(mod) || java.lang.reflect.Modifier.isFinal(mod)
+                    || !java.lang.reflect.Modifier.isPublic(mod)) continue;
+            try {
+                Class<?> t = f.getType();
+                if (t == boolean.class) out.put(f.getName(), f.getBoolean(null));
+                else if (t == int.class) out.put(f.getName(), f.getInt(null));
+                else if (t == double.class) out.put(f.getName(), String.valueOf(f.getDouble(null)));
+                else if (t == String.class) out.put(f.getName(), f.get(null) != null ? f.get(null) : "");
+            } catch (Throwable ignored) {}
+        }
+        return java.util.Collections.unmodifiableMap(out);
+    }
 }

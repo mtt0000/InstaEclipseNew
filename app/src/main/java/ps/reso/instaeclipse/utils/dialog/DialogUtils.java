@@ -38,6 +38,9 @@ import ps.reso.instaeclipse.mods.devops.config.ConfigManager;
 import ps.reso.instaeclipse.mods.ghost.ui.GhostEmojiManager;
 import ps.reso.instaeclipse.mods.location.LocationPickerActivity;
 import ps.reso.instaeclipse.mods.ui.UIHookManager;
+import ps.reso.instaeclipse.mods.ui.utils.InjectedUi;
+import ps.reso.instaeclipse.mods.ui.utils.ProfileManager;
+import ps.reso.instaeclipse.utils.toast.IeToast;
 import ps.reso.instaeclipse.utils.core.ModuleActivityLauncher;
 import ps.reso.instaeclipse.utils.core.SettingsManager;
 import ps.reso.instaeclipse.utils.feature.FeatureFlags;
@@ -163,6 +166,16 @@ public class DialogUtils {
         mainLayout.setOrientation(LinearLayout.VERTICAL);
         mainLayout.setPadding(24, 0, 24, 0);
 
+        // ---- PROFILES ---- settings profiles, and everything the module adds to Instagram off at once
+        mainLayout.addView(sectionHeader(context, I18n.t(context, R.string.profiles_group)));
+        LinearLayout profiles = createGroupCard(context);
+        ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile activeProfile = ProfileManager.store().active();
+        profiles.addView(createMenuRow(context, R.drawable.ic_tune, I18n.t(context, R.string.profiles_title), A_TOOLS,
+                () -> showSettingsProfiles(context), activeProfile != null ? activeProfile.name : null));
+        profiles.addView(createMenuRow(context, R.drawable.ic_block, I18n.t(context, R.string.injections_off_title), A_TOOLS,
+                () -> confirmDisableInjections(context), null));
+        mainLayout.addView(profiles);
+
         // ---- APPEARANCE ---- look & feel: theme, feed, navigation bar, reels & stories
         mainLayout.addView(sectionHeader(context, I18n.t(context, R.string.feat_group_appearance)));
         LinearLayout appearance = createGroupCard(context);
@@ -176,10 +189,10 @@ public class DialogUtils {
         // ---- PRIVACY ---- ghost, messages, hidden chats, lock, ads/tracking, location, distraction-free
         mainLayout.addView(sectionHeader(context, I18n.t(context, R.string.feat_group_privacy)));
         LinearLayout privacy = createGroupCard(context);
-        privacy.addView(createMenuRow(context, R.drawable.ic_eye, I18n.t(context, R.string.ig_dialog_menu_ghost_settings), A_PRIVACY, () -> showGhostOptions(context), onCount(context, "isGhostSeen", "isGhostTyping", "isGhostStory", "isGhostLive", "isGhostScreenshot", "isGhostViewOnce", "readReceiptChats", "spoofLastSeen", "airplaneMode")));
-        privacy.addView(createMenuRow(context, R.drawable.ic_chat, I18n.t(context, R.string.menu_messages), A_PRIVACY, () -> showMessagesOptions(context), onCount(context, "keepEphemeralMessages", "keepUnsentMessages", "keepEditHistory", "jumpToFirstMessage", "confirmCalls", "allowScreenshots", "permanentViewMode", "translateMessages", "bulkUnsend", "chatExport", "hideNotesTray", "hideDmSuggestions", "hideDmBlend", "hideShareCreateGroup")));
+        privacy.addView(createMenuRow(context, R.drawable.ic_eye, I18n.t(context, R.string.ig_dialog_menu_ghost_settings), A_PRIVACY, () -> showGhostOptions(context), onCount(context, "isGhostSeen", "isGhostTyping", "isGhostStory", "isGhostLive", "isGhostScreenshot", "isGhostViewOnce", "ghostSeenButton", "ghostInboxTint", "readReceiptChats", "spoofLastSeen", "airplaneMode")));
+        privacy.addView(createMenuRow(context, R.drawable.ic_chat, I18n.t(context, R.string.menu_messages), A_PRIVACY, () -> showMessagesOptions(context), onCount(context, "keepEphemeralMessages", "keepUnsentMessages", "keepEditHistory", "jumpToFirstMessage", "confirmCalls", "allowScreenshots", "permanentViewMode", "translateMessages", "bulkUnsend", "chatExport", "chatHeaderMenu", "hideNotesTray", "hideDmSuggestions", "hideDmBlend", "hideShareCreateGroup")));
         privacy.addView(createMenuRow(context, R.drawable.ic_eye_off, I18n.t(context, R.string.ig_hide_chats_title), A_PRIVACY, () -> showHideChatsOptions(context), onCount(context, "hideSpecificChats")));
-        privacy.addView(createMenuRow(context, R.drawable.ic_shield, I18n.t(context, R.string.ig_dialog_misc_lock_section), A_PRIVACY, () -> showLockOptions(context), onCount(context, "lockDirectMessages", "lockWholeApp", "lockSavedCollections", "lockUseFingerprint")));
+        privacy.addView(createMenuRow(context, R.drawable.ic_shield, I18n.t(context, R.string.ig_dialog_misc_lock_section), A_PRIVACY, () -> showLockOptions(context), onCount(context, "lockDirectMessages", "lockWholeApp", "lockSavedCollections", "lockCollectionsButton", "lockUseFingerprint")));
         privacy.addView(createMenuRow(context, R.drawable.ic_block, I18n.t(context, R.string.menu_ads_tracking), A_PRIVACY, () -> showAdOptions(context), onCount(context, "isAdBlockEnabled", "isAnalyticsBlocked", "disableTrackingLinks", "disableSearchHistory")));
         privacy.addView(createMenuRow(context, R.drawable.ic_pin, I18n.t(context, R.string.ig_dialog_menu_location), A_PRIVACY, () -> showLocationOptions(context), onCount(context, "spoofLocation")));
         privacy.addView(createMenuRow(context, R.drawable.ic_notification, I18n.t(context, R.string.ig_dialog_menu_distraction_free), A_PRIVACY, () -> showDistractionOptions(context), onCount(context, "isExtremeMode", "disableStories", "disableFeed", "disableReels", "disableReelsExceptDM", "disableExplore", "disableComments", "removeMetaAI", "hideOnboardingPrompts", "hidePlusUpsells", "hideInstants")));
@@ -197,7 +210,7 @@ public class DialogUtils {
         mainLayout.addView(sectionHeader(context, I18n.t(context, R.string.feat_group_social)));
         LinearLayout social = createGroupCard(context);
         social.addView(createMenuRow(context, R.drawable.ic_heart, I18n.t(context, R.string.menu_likes_comments), A_SOCIAL, () -> showLikesCommentsOptions(context), onCount(context, "disableDoubleTapLike", "likeUndo", "confirmLikes", "enableCopyComment", "commentSearch", "enableCaptionCopy", "disableRepost")));
-        social.addView(createMenuRow(context, R.drawable.ic_eye, I18n.t(context, R.string.menu_profiles), A_SOCIAL, () -> showProfilesOptions(context), onCount(context, "profileMenuTools", "postCountSpoof", "profileSpoofer", "profileAnalyzer", "confirmFollows", "profileFollowsYouLabel", "fancyBioFont", "showFollowerToast", "followListExport", "followersHistory", "savedOnProfile", "hideThreadsButton")));
+        social.addView(createMenuRow(context, R.drawable.ic_eye, I18n.t(context, R.string.menu_profiles), A_SOCIAL, () -> showProfilesOptions(context), onCount(context, "profileMenuTools", "postCountSpoof", "postCountsMenu", "profileSpoofer", "profileAnalyzer", "confirmFollows", "profileFollowsYouLabel", "fancyBioFont", "showFollowerToast", "followListExport", "followersHistory", "savedOnProfile", "hideThreadsButton")));
         mainLayout.addView(social);
 
         // ---- TOOLS ---- app & account, developer, backup, restart, cache, about
@@ -1125,6 +1138,9 @@ public class DialogUtils {
         // Outside the master switch: last-seen spoofing and airplane mode.
         layout.addView(createDivider(context));
         layout.addView(cardOf(context,
+                // Buttons only: Ghost Mode works without them (off with "Turn off all injections").
+                flagSwitch(context, R.drawable.ic_eye_off, "#5E5CE6", R.string.ie_ghost_seen_button, "ghostSeenButton"),
+                flagSwitch(context, R.drawable.ic_chat, "#5E5CE6", R.string.ie_ghost_inbox_tint, "ghostInboxTint", refreshGhostEmoji),
                 flagSwitch(context, R.drawable.ic_eye, "#5E5CE6", R.string.ig_dialog_ghost_read_receipt_chats, "readReceiptChats"),
                 flagSwitch(context, R.drawable.ic_timer, "#5E5CE6", R.string.ig_dialog_misc_spoof_last_seen, "spoofLastSeen"),
                 // Airplane mode takes effect at once: stop / restart the live MQTT connection.
@@ -1146,6 +1162,7 @@ public class DialogUtils {
                         ps.reso.instaeclipse.mods.ghost.KeepUnsentMessagesHook::onSettingsChanged),
                 flagSwitch(context, R.drawable.ic_delete, "#5E5CE6", R.string.ie_show_deleted_button, "showDeletedMessagesButton",
                         ps.reso.instaeclipse.mods.ghost.ConversationMenuHook::refreshAll),
+                flagSwitch(context, R.drawable.ic_tune, "#5E5CE6", R.string.ie_chat_header_menu, "chatHeaderMenu"),
                 createActionRow(context, R.drawable.ic_chat, I18n.t(context, R.string.ie_chat_actions), "#5E5CE6",
                         v -> ps.reso.instaeclipse.mods.ghost.ConversationMenuHook.show(activityOf(context))),
                 createActionRow(context, R.drawable.ic_chat, I18n.t(context, R.string.ig_dialog_unsent_title), "#5E5CE6", v -> showUnsentMessages(context)),
@@ -1775,6 +1792,7 @@ public class DialogUtils {
             SettingsManager.saveAllFlags();
         });
         cardView.addView(lockColl);
+        cardView.addView(flagSwitch(context, R.drawable.ic_shield, "#BF5AF2", R.string.ie_lock_collections_button, "lockCollectionsButton"));
 
         return cardView;
     }
@@ -1799,6 +1817,7 @@ public class DialogUtils {
         layout.addView(cardOf(context,
                 flagSwitch(context, R.drawable.ic_content_copy, A_SOCIAL, R.string.ig_profile_menu_tools, "profileMenuTools"),
                 flagSwitch(context, R.drawable.ic_heart, A_SOCIAL, R.string.ig_post_counts_feature, "postCountSpoof"),
+                flagSwitch(context, R.drawable.ic_tune, A_SOCIAL, R.string.ie_post_counts_menu, "postCountsMenu"),
                 flagSwitch(context, R.drawable.ic_eye, A_SOCIAL, R.string.ig_profile_spoofer, "profileSpoofer"),
                 createActionRow(context, R.drawable.ic_tune, I18n.t(context, R.string.ig_profile_spoofer_edit), A_SOCIAL,
                         v -> showProfileSpoofDialog(context)),
@@ -2565,7 +2584,7 @@ public class DialogUtils {
 
     /** Standard (the original downloader) or Best, with its resolution cap. */
     private static String downloadModeLabel(Context context) {
-        return FeatureFlags.downloaderUseOriginal ? I18n.t(context, R.string.ie_downloader_original)
+        return !FeatureFlags.downloaderCustomQuality ? I18n.t(context, R.string.ie_downloader_original)
                 : downloadQualityLabel(context, FeatureFlags.downloaderQualityMaxShortSide);
     }
 
@@ -2577,13 +2596,13 @@ public class DialogUtils {
         for (int i = 0; i < ceilings.length; i++) {
             labels[i] = ceilings[i] < 0 ? I18n.t(context, R.string.ie_downloader_original)
                     : downloadQualityLabel(context, ceilings[i]);
-            if (!FeatureFlags.downloaderUseOriginal && ceilings[i] == FeatureFlags.downloaderQualityMaxShortSide) selected = i;
+            if (FeatureFlags.downloaderCustomQuality && ceilings[i] == FeatureFlags.downloaderQualityMaxShortSide) selected = i;
         }
         new IeDialog(context)
                 .title(I18n.t(context, R.string.ie_download_quality))
                 .message(I18n.t(context, R.string.ie_download_quality_hint))
                 .choices(labels, selected, which -> {
-                    FeatureFlags.downloaderUseOriginal = ceilings[which] < 0;
+                    FeatureFlags.downloaderCustomQuality = ceilings[which] >= 0;
                     if (ceilings[which] >= 0) FeatureFlags.downloaderQualityMaxShortSide = ceilings[which];
                     SettingsManager.saveAllFlags();
                     if (label != null) if (label instanceof android.widget.TextView) ((android.widget.TextView) label).setText(I18n.t(context, R.string.ie_download_quality) + " · " + downloadModeLabel(context));
@@ -2609,7 +2628,7 @@ public class DialogUtils {
         });
         // The two switches only apply to Best, so they show only then.
         Runnable updateBestControls = () -> {
-            int visibility = FeatureFlags.downloaderUseOriginal ? View.GONE : View.VISIBLE;
+            int visibility = FeatureFlags.downloaderCustomQuality ? View.VISIBLE : View.GONE;
             compatibility.setVisibility(visibility);
             lowerFallback.setVisibility(visibility);
         };
@@ -2889,6 +2908,136 @@ public class DialogUtils {
     }
 
     @SuppressLint("SetTextI18n")
+    /** "Turn off all injections": every switch that only adds something to Instagram, after a confirm. */
+    private static void confirmDisableInjections(Context context) {
+        IeDialog dlg = new IeDialog(context)
+                .title(I18n.t(context, R.string.injections_off_title))
+                .message(I18n.t(context, R.string.injections_off_confirm));
+        dlg.secondary(I18n.t(context, android.R.string.cancel), null);
+        dlg.primary(I18n.t(context, R.string.injections_off_action), () -> {
+            InjectedUi.disableAll(activityOf(context));
+            IeToast.makeText(context, I18n.t(context, R.string.injections_off_done), Toast.LENGTH_SHORT).show();
+            showEclipseOptionsDialog(context);
+        });
+        dlg.show();
+    }
+
+    /** Settings profiles: the list (tap one for its actions), new profile, and how a switch is confirmed. */
+    private static void showSettingsProfiles(Context context) {
+        LinearLayout layout = createSwitchLayout(context);
+        ps.reso.instaeclipse.utils.core.SettingsProfiles store = ProfileManager.store();
+        ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile active = store.active();
+
+        layout.addView(sectionHeader(context, I18n.t(context, R.string.profiles_list)));
+        LinearLayout list = card(context);
+        for (ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile pr : store.list()) {
+            boolean on = active != null && pr.id.equals(active.id);
+            list.addView(createActionRow(context, on ? R.drawable.ic_check_circle : R.drawable.ic_tune,
+                    on ? I18n.t(context, R.string.profiles_active_row, pr.name) : pr.name,
+                    on ? "#30D158" : "#8E8E93", v -> showProfileActions(context, pr.id)));
+        }
+        list.addView(createActionRow(context, R.drawable.ic_save, I18n.t(context, R.string.profiles_new), "#0A84FF",
+                v -> promptProfileName(context, I18n.t(context, R.string.profiles_new),
+                        store.uniqueName(I18n.t(context, R.string.profiles_default_name, store.list().size() + 1)), name -> {
+                            ps.reso.instaeclipse.utils.core.SettingsProfiles p = ProfileManager.store();
+                            p.add(p.uniqueName(name));
+                            ProfileManager.save(p);
+                            showSettingsProfiles(context);
+                        })));
+        layout.addView(list);
+        layout.addView(createInfoSection(context, "", I18n.t(context, R.string.profiles_hint)));
+
+        layout.addView(sectionHeader(context, I18n.t(context, R.string.profiles_confirm_section)));
+        layout.addView(cardOf(context,
+                flagSwitch(context, R.drawable.ic_notification, "#30D158", R.string.profiles_confirm_vibrate, "profileSwitchVibrate"),
+                flagSwitch(context, R.drawable.ic_notification, "#30D158", R.string.profiles_confirm_name, "profileSwitchShowName")));
+
+        showSectionDialog(context, I18n.t(context, R.string.profiles_title), layout, () -> {});
+    }
+
+    private static void showProfileActions(Context context, String id) {
+        ps.reso.instaeclipse.utils.core.SettingsProfiles store = ProfileManager.store();
+        ps.reso.instaeclipse.utils.core.SettingsProfiles.Profile pr = store.get(id);
+        if (pr == null) return;
+        boolean isActive = store.active() != null && id.equals(store.active().id);
+        String[] labels = {
+                I18n.t(context, R.string.profiles_action_activate),
+                I18n.t(context, R.string.profiles_action_edit),
+                I18n.t(context, R.string.profiles_action_rename),
+                I18n.t(context, R.string.profiles_action_clone),
+                I18n.t(context, R.string.profiles_action_reset),
+                I18n.t(context, R.string.profiles_action_delete)};
+        IeDialog dlg = new IeDialog(context).title(pr.name).choices(labels, -1, which -> {
+            Activity a = activityOf(context);
+            switch (which) {
+                case 0: // activate
+                    ProfileManager.activate(a, ProfileManager.store(), id);
+                    showSettingsProfiles(context);
+                    break;
+                case 1: // edit: its settings are the menu's while it is active
+                    ProfileManager.activate(a, ProfileManager.store(), id);
+                    showEclipseOptionsDialog(context);
+                    break;
+                case 2:
+                    promptProfileName(context, labels[2], pr.name, name -> {
+                        ps.reso.instaeclipse.utils.core.SettingsProfiles p = ProfileManager.store();
+                        if (p.rename(id, name)) ProfileManager.save(p);
+                        showSettingsProfiles(context);
+                    });
+                    break;
+                case 3:
+                    promptProfileName(context, labels[3], store.uniqueName(I18n.t(context, R.string.profiles_copy_name, pr.name)), name -> {
+                        ps.reso.instaeclipse.utils.core.SettingsProfiles p = ProfileManager.store();
+                        p.duplicate(id, p.uniqueName(name), SettingsManager.currentValues(), FeatureFlags.defaults());
+                        ProfileManager.save(p);
+                        showSettingsProfiles(context);
+                    });
+                    break;
+                case 4:
+                    confirmProfile(context, labels[4], I18n.t(context, R.string.profiles_reset_confirm, pr.name), () -> {
+                        ProfileManager.reset(a, ProfileManager.store(), id);
+                        showSettingsProfiles(context);
+                    });
+                    break;
+                case 5:
+                    if (isActive || store.list().size() < 2) {
+                        IeToast.makeText(context, I18n.t(context, R.string.profiles_cant_delete), Toast.LENGTH_SHORT).show();
+                        break;
+                    }
+                    confirmProfile(context, labels[5], I18n.t(context, R.string.profiles_delete_confirm, pr.name), () -> {
+                        ps.reso.instaeclipse.utils.core.SettingsProfiles p = ProfileManager.store();
+                        if (p.delete(id)) ProfileManager.save(p);
+                        showSettingsProfiles(context);
+                    });
+                    break;
+            }
+        });
+        dlg.secondary(I18n.t(context, android.R.string.cancel), null);
+        dlg.show();
+    }
+
+    private static void confirmProfile(Context context, String title, String message, Runnable onYes) {
+        IeDialog dlg = new IeDialog(context).title(title).message(message);
+        dlg.secondary(I18n.t(context, android.R.string.cancel), null);
+        dlg.primary(I18n.t(context, android.R.string.ok), onYes);
+        dlg.show();
+    }
+
+    private static void promptProfileName(Context context, String title, String initial,
+                                          java.util.function.Consumer<String> onName) {
+        IeDialog dlg = new IeDialog(context).title(title);
+        final android.widget.EditText input = dlg.input(I18n.t(context, R.string.profiles_name_hint));
+        input.setSingleLine(true);
+        input.setText(initial);
+        input.setSelection(input.getText().length());
+        dlg.secondary(I18n.t(context, android.R.string.cancel), null);
+        dlg.primary(I18n.t(context, android.R.string.ok), () -> {
+            String name = input.getText().toString().trim();
+            if (!name.isEmpty()) onName.accept(name);
+        });
+        dlg.show();
+    }
+
     private static void showBackupRestoreOptions(Context context) {
         LinearLayout layout = createSwitchLayout(context);
 

@@ -95,6 +95,25 @@ public class CommonUtils {
         } catch (Throwable ignored) {}
     }
 
+    /**
+     * Companion: writes several settings at once with their "__ts_" stamps, without one broadcast
+     * each (a profile switch changes dozens). Follow with {@link CompanionSync#ACTION_PULL} so a
+     * running Instagram takes them in one go; otherwise it does on its next start or resume.
+     */
+    public static void stampSettings(Context context, java.util.Map<String, ?> values) {
+        long now = System.currentTimeMillis();
+        android.content.SharedPreferences.Editor e = companionCache(context).edit();
+        for (java.util.Map.Entry<String, ?> v : values.entrySet()) {
+            Object value = v.getValue();
+            if (value instanceof Boolean) e.putBoolean(v.getKey(), (Boolean) value);
+            else if (value instanceof Integer) e.putInt(v.getKey(), (Integer) value);
+            else if (value instanceof String) e.putString(v.getKey(), (String) value);
+            else continue;
+            e.putLong("__ts_" + v.getKey(), now);
+        }
+        e.commit();
+    }
+
     /** Sends commands only to an explicitly trusted installed host signing identity. */
     public static void broadcastToInstagram(Context context, Intent intent) {
         stampSetting(context, intent);

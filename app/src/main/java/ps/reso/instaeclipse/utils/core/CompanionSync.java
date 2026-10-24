@@ -27,6 +27,9 @@ import ps.reso.instaeclipse.utils.log.ModuleLog;
  */
 public final class CompanionSync {
 
+    /** Companion -> Instagram: settings were written to the companion's prefs (stampSettings), pull them now. */
+    public static final String ACTION_PULL = "ps.reso.instaeclipse.ACTION_PULL_PREFS";
+
     static final String TS = "__ts_";
     static final String APPLIED = "__applied_";
     static final String IG_TS = "__igts_";
@@ -49,9 +52,14 @@ public final class CompanionSync {
     }
 
     /** Applies newer companion settings; returns true when something changed. */
-    public static synchronized boolean pull(Context context) {
+    public static boolean pull(Context context) {
+        return pull(context, false);
+    }
+
+    /** {@code force}: also right after another pull (asked for by the companion, ACTION_PULL). */
+    public static synchronized boolean pull(Context context, boolean force) {
         long now = SystemClock.elapsedRealtime();
-        if (lastPull != 0 && now - lastPull < MIN_INTERVAL_MS) return false;
+        if (!force && lastPull != 0 && now - lastPull < MIN_INTERVAL_MS) return false;
         lastPull = now;
         try {
             // Small file, throttled, off the main thread: always re-read (hasFileChanged() missed

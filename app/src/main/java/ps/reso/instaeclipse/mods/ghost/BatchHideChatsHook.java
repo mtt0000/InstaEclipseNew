@@ -28,7 +28,7 @@ import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import ps.reso.instaeclipse.R;
-import ps.reso.instaeclipse.mods.ui.utils.CleanUiManager;
+import ps.reso.instaeclipse.mods.ui.utils.InjectedUi;
 import ps.reso.instaeclipse.utils.dialog.DialogUtils;
 import ps.reso.instaeclipse.utils.dialog.IeDialog;
 import ps.reso.instaeclipse.utils.feature.FeatureFlags;
@@ -118,8 +118,7 @@ public final class BatchHideChatsHook {
         if (a.isFinishing() || a.isDestroyed()) return;
         View decor = a.getWindow().getDecorView();
         View existing = decor.findViewWithTag(BTN_TAG);
-        boolean wanted = FeatureFlags.hideSpecificChats && FeatureFlags.enableBatchHideChats
-                && !FeatureFlags.isCleanUiActive;
+        boolean wanted = FeatureFlags.hideSpecificChats && FeatureFlags.enableBatchHideChats;
         View bar = wanted && actionBarId != 0 ? a.findViewById(actionBarId) : null;
         boolean onInbox = bar instanceof ViewGroup && bar.isShown()
                 && (threadHeaderId == 0 || a.findViewById(threadHeaderId) == null);
@@ -170,7 +169,7 @@ public final class BatchHideChatsHook {
         host.addView(btn, host.indexOfChild(anchor), lp);
         // A right-aligned anchor in a FrameLayout-like host: put ours just left of it.
         if (!(host instanceof LinearLayout)) btn.setTranslationX(-size);
-        CleanUiManager.trackInjectedView(btn);
+        InjectedUi.track(btn, () -> FeatureFlags.enableBatchHideChats);
         ModuleLog.line(TAG + "✅ button added in " + host.getClass().getSimpleName());
     }
 
